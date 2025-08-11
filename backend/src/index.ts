@@ -87,7 +87,7 @@ class App {
     });
 
     // API routes
-    this.app.use('/api/simulation', simulationRoutes);
+    this.app.use('/api', simulationRoutes);
 
     // Root endpoint
     this.app.get('/', (req, res) => {
@@ -96,7 +96,7 @@ class App {
         version: process.env.npm_package_version || '1.0.0',
         endpoints: {
           health: '/health',
-          simulation: '/api/simulation',
+          simulation: '/api',
         },
       });
     });

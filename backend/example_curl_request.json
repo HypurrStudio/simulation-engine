@@ -1,0 +1,10 @@
+{
+  "from": "0x778d3206374f8ac265728e18e3fe2ae6b93e4ce4",
+  "to": "0x28e0f09be2321c1420dc60ee146aacbd68b335fe",
+  "input": "0xf9bfe8a7cc74097f54a34482486e48747b9cb1b59d58a2dadd0e8bb713795ecf24eb542f",
+  "value": "0x259CC5924050",
+  "gas": "0x7A1200",
+  "gasPrice": "0x70ACE654C",
+  "generateAccessList": true,
+  "blockNumber": "0x87db80"
+}

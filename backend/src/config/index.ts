@@ -10,7 +10,7 @@ const envSchema = Joi.object({
   PORT: Joi.number().default(4000),
   HYPEREVM_RPC_URL: Joi.string().uri().required(),
   HYPEREVM_CHAIN_ID: Joi.number().required(),
-  ETHERSCAN_API_KEY: Joi.string().uri().required(),
+  ETHERSCAN_API_KEY: Joi.string().required(),
   LOG_LEVEL: Joi.string().valid('error', 'warn', 'info', 'debug').default('info'),
   RATE_LIMIT_WINDOW_MS: Joi.number().default(15 * 60 * 1000), // 15 minutes
   RATE_LIMIT_MAX_REQUESTS: Joi.number().default(100),
