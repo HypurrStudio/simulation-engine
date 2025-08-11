@@ -16,7 +16,6 @@ export interface SimulationRequest {
     };
   };
   generateAccessList?: boolean;
-  networkId?: string;
   blockHeader?: {
     number: string;
     timestamp: string;
