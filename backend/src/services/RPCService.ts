@@ -247,8 +247,8 @@ export class RPCService {
     try {
       await this.getNetworkId();
       return true;
-    } catch (error) {
-      logger.error('RPC health check failed', { error: error.message });
+    } catch (error: any) {
+      logger.error('RPC health check failed', { error: error?.message });
       return false;
     }
   }

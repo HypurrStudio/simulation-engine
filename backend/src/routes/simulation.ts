@@ -3,6 +3,7 @@ import { simulationService } from '../services/simulationService';
 import { validateSimulationRequest } from '../utils/validation';
 import { asyncHandler } from '../middleware/errorHandler';
 import logger from '../utils/logger';
+import { SimulationRequest } from '../types/simulation';
 
 const router = Router();
 
@@ -22,7 +23,7 @@ router.post('/simulate', asyncHandler(async (req: Request, res: Response) => {
   const validatedRequest = validateSimulationRequest(req.body as any);
 
   // Execute simulation
-  const response = await simulationService.simulateTransaction(validatedRequest);
+  const response = await simulationService.simulateTransaction(validatedRequest as SimulationRequest);
 
   logger.info('Simulation request completed');
 

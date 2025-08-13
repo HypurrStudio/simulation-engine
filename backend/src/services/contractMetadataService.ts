@@ -38,11 +38,11 @@ export class ContractMetadataService {
       }
 
       return metadata;
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Failed to fetch contract metadata', {
         address,
         networkId,
-        error: error.message,
+        error: error?.message,
       });
       
       // Return null instead of throwing to allow simulation to continue

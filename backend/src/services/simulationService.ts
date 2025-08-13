@@ -30,8 +30,7 @@ export class SimulationService {
     logger.info('Starting transaction simulation', {
       simulationId,
       from: request.from,
-      to: request.to,
-      networkId: request.networkId,
+      to: request.to
     });
 
     try {
@@ -54,13 +53,13 @@ export class SimulationService {
       const contractAddresses = this.collectContractAddresses(callTrace, request.to);
 
       const [blockHeaderResult, accessList, contractsMetadataResult] = await Promise.allSettled([
-        this.fetchBlockHeader(request.blockNumber),
+        this.fetchBlockHeader(request.blockNumber || 'latest'),
         this.generateAccessList(request, callParams),
         this.fetchContractMetadata(contractAddresses, config.hyperEvmChainId.toString())
       ]);
 
       const blockHeader = blockHeaderResult.status === "fulfilled" ? blockHeaderResult.value : null;
-      const contractsMetadata = contractsMetadataResult.status === "fulfilled" ? contractsMetadataResult.value : null;
+      const contractsMetadata = contractsMetadataResult.status === "fulfilled" ? contractsMetadataResult.value : [];
 
       const {storageDiff, balanceDiff} = this.splitStateDiff(traceResult.stateDiff || {});
 
@@ -84,14 +83,14 @@ export class SimulationService {
       // });
 
       return response;
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Transaction simulation failed', {
         simulationId,
-        error: error.message,
-        stack: error.stack,
+        error: error?.message,
+        stack: error?.stack,
       });
 
-      throw new SimulationError(`Simulation failed: ${error.message}`);
+      throw new SimulationError(`Simulation failed: ${error?.message}`);
     }
   }
 
@@ -221,8 +220,8 @@ export class SimulationService {
 
     try {
       return await rpcService.getBlockByNumber(blockNumber, false);
-    } catch (error) {
-      logger.warn('Failed to fetch block header', { blockNumber, error: error.message });
+    } catch (error: any) {
+      logger.warn('Failed to fetch block header', { blockNumber, error: error?.message });
       return {};
     }
   }
@@ -244,8 +243,8 @@ export class SimulationService {
         request.blockNumber || 'latest'
       );
       return result.accessList || [];
-    } catch (error) {
-      logger.warn('Failed to generate access list', { error: error.message });
+    } catch (error: any) {
+      logger.warn('Failed to generate access list', { error: error?.message });
       return [];
     }
   }

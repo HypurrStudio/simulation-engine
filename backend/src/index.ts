@@ -133,7 +133,7 @@ class App {
           rpcUrl: config.hyperEvmRpcUrl,
         });
       });
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Failed to start application', { error: error.message });
       process.exit(1);
     }
