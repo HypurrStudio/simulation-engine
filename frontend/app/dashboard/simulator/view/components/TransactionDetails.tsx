@@ -44,7 +44,8 @@ export default function TransactionDetails({ responseData, decodedTraceTree }: {
   const isSuccess = !errorInfo?.hasError;
 
   // Get gas price from transaction
-  const gasPrice = responseData.transaction?.gas_price || "0x0";
+  console.log(responseData);
+  const gasPrice = responseData.transaction?.gasPrice || "0x0";
   const gasPriceInWei = parseInt(gasPrice, 16);
   const gasPriceInEth = gasPriceInWei / 1e18;
 
@@ -175,10 +176,26 @@ export default function TransactionDetails({ responseData, decodedTraceTree }: {
             </div>
 
             <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-400">Tx Fee</span>
+              <span className="text-sm text-white">
+                {responseData?.transaction?.callTrace?.[0]?.gas_used
+                  ? (() => {
+                      const gasUsed = parseInt(responseData.transaction.callTrace[0].gas_used, 16);
+                      const gasPrice = parseInt(responseData.transaction.gasPrice || "0", 16);
+                      const feeWei = gasUsed * gasPrice;
+                      const feeEth = feeWei / 1e18; // assuming HYPE uses 18 decimals like ETH
+
+                      return `${feeEth.toFixed(9)} HYPE`;
+                    })()
+                  : "Unknown"}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between">
               <span className="text-sm text-gray-400">Gas Price</span>
               <span className="text-sm text-white">
                 {gasPriceInWei > 0 
-                  ? `${gasPriceInWei.toLocaleString()} Wei (${gasPriceInEth.toFixed(9)} HYPE)`
+                  ? `${gasPriceInWei.toLocaleString()} Wei (${gasPriceInEth.toFixed(12)} HYPE)`
                   : "0 Wei (0 HYPE)"
                 }
               </span>
