@@ -144,31 +144,28 @@ export default function SummaryTab({ activeTab, responseData, decodedTraceTree }
     // Function to format input parameters for display
     const formatInputForDisplay = (inputDecoded: any) => {
       if (!inputDecoded || !Array.isArray(inputDecoded)) return {};
-      
+
       const formatted: any = {};
-      inputDecoded.forEach((value: any, index: number) => {
-        // Try to get parameter name from function signature if available
-        const rootTrace = decodedTraceTree;
-        if (rootTrace && rootTrace.signature) {
-          // Extract parameter names from signature like "functionName(type1,type2)"
-          const match = rootTrace.signature.match(/\(([^)]*)\)/);
-          if (match && match[1]) {
-            const paramTypes = match[1].split(',').map((p: string) => p.trim());
-            if (paramTypes[index]) {
-              // Remove type info, keep just the name if it exists
-              const paramName = paramTypes[index].split(' ').pop() || `param${index}`;
-              formatted[paramName] = value;
-            } else {
-              formatted[`param${index}`] = value;
-            }
-          } else {
-            formatted[`param${index}`] = value;
-          }
-        } else {
-          formatted[`param${index}`] = value;
+      const rootTrace = decodedTraceTree;
+      let paramTypes: string[] = [];
+
+      // Extract parameter types from signature
+      if (rootTrace?.signature) {
+        const match = rootTrace.signature.match(/\(([^)]*)\)/);
+        if (match && match[1]) {
+          paramTypes = match[1]
+            .split(',')
+            .map((p: string) => p.trim())
+            .filter(Boolean);
         }
+      }
+
+      // Map decoded inputs with unique keys
+      inputDecoded.forEach((value: any, index: number) => {
+        const typeName = paramTypes[index] || `param${index}`;
+        formatted[`${typeName}_${index}`] = value;
       });
-      
+
       return formatted;
     };
 
@@ -208,7 +205,7 @@ export default function SummaryTab({ activeTab, responseData, decodedTraceTree }
                         {Object.entries(inputData).map(([key, value], index) => (
                           <div key={index}>
                             <span className="text-gray-400">  </span>
-                            <code className="text-green-300">"{key}"</code>
+                            <code className="text-green-300">"{key.split('_')[0]}"</code>
                             <code className="text-gray-300">: </code>
                             <code className="text-yellow-300">"</code>
                             <code className="text-blue-400">{String(value)}</code>
@@ -220,7 +217,6 @@ export default function SummaryTab({ activeTab, responseData, decodedTraceTree }
                     ) : (
                       <span className="text-gray-500">  // No input parameters</span>
                     )}
-                    <br />
                     <code className="text-blue-300">{`}`}</code>
                   </pre>
                 </div>
