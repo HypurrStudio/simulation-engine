@@ -8,7 +8,7 @@ dotenv.config();
 const envSchema = Joi.object({
   NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
   PORT: Joi.number().default(4000),
-  HYPEREVM_RPC_URL: Joi.string().uri().required(),
+  HYPEREVM_RPC_URLS: Joi.string().required(),
   HYPEREVM_CHAIN_ID: Joi.number().required(),
   ETHERSCAN_API_KEY: Joi.string().required(),
   LOG_LEVEL: Joi.string().valid('error', 'warn', 'info', 'debug').default('info'),
@@ -30,7 +30,7 @@ if (error) {
 export interface Config {
   nodeEnv: string;
   port: number;
-  hyperEvmRpcUrl: string;
+  hyperEvmRpcUrls: string[];
   hyperEvmChainId: number;
   etherscanApiKey: string;
   logLevel: string;
@@ -51,7 +51,7 @@ export interface Config {
 export const config: Config = {
   nodeEnv: envVars.NODE_ENV,
   port: envVars.PORT,
-  hyperEvmRpcUrl: envVars.HYPEREVM_RPC_URL,
+  hyperEvmRpcUrls: envVars.HYPEREVM_RPC_URLS.split(",").map((url: string) => url.trim()),
   hyperEvmChainId: envVars.HYPEREVM_CHAIN_ID,
   etherscanApiKey: envVars.ETHERSCAN_API_KEY,
   logLevel: envVars.LOG_LEVEL,

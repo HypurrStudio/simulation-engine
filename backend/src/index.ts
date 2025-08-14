@@ -130,7 +130,7 @@ class App {
         logger.info('Simulation Engine started successfully', {
           port: config.port,
           nodeEnv: config.nodeEnv,
-          rpcUrl: config.hyperEvmRpcUrl,
+          rpcUrl: config.hyperEvmRpcUrls,
         });
       });
     } catch (error: any) {

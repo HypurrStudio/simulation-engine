@@ -65,79 +65,94 @@ export interface AccessListResult {
  * Handles all blockchain RPC communication with proper error handling and retries
  */
 export class RPCService {
-  private client: AxiosInstance;
+  private clients: AxiosInstance[];
   private requestId: number = 1;
 
   constructor() {
-    this.client = axios.create({
-      baseURL: config.hyperEvmRpcUrl,
-      timeout: config.request.timeoutMs,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+    // Create one Axios instance per RPC URL
+    this.clients = config.hyperEvmRpcUrls.map((url) => {
+      const client = axios.create({
+        baseURL: url,
+        timeout: config.request.timeoutMs,
+        headers: { "Content-Type": "application/json" },
+      });
+
+      // Add request interceptor for logging
+      client.interceptors.request.use(
+        (cfg) => {
+          logger.debug("RPC Request", {
+            rpcUrl: url,
+            method: cfg.method?.toUpperCase(),
+            path: cfg.url,
+            data: cfg.data,
+          });
+          return cfg;
+        },
+        (error) => {
+          logger.error("RPC Request Error", { rpcUrl: url, error: error.message });
+          return Promise.reject(error);
+        }
+      );
+
+      // Add response interceptor for logging
+      client.interceptors.response.use(
+        (response) => {
+          logger.debug("RPC Response", {
+            rpcUrl: url,
+            status: response.status,
+            data: response.data,
+          });
+          return response;
+        },
+        (error) => {
+          logger.error("RPC Response Error", {
+            rpcUrl: url,
+            status: error.response?.status,
+            data: error.response?.data,
+            message: error.message,
+          });
+          return Promise.reject(error);
+        }
+      );
+
+      return client;
     });
-
-    // Add request interceptor for logging
-    this.client.interceptors.request.use(
-      (config) => {
-        logger.debug('RPC Request', {
-          method: config.method?.toUpperCase(),
-          url: config.url,
-          data: config.data,
-        });
-        return config;
-      },
-      (error) => {
-        logger.error('RPC Request Error', { error: error.message });
-        return Promise.reject(error);
-      }
-    );
-
-    // Add response interceptor for logging
-    this.client.interceptors.response.use(
-      (response) => {
-        logger.debug('RPC Response', {
-          status: response.status,
-          data: response.data,
-        });
-        return response;
-      },
-      (error) => {
-        logger.error('RPC Response Error', {
-          status: error.response?.status,
-          data: error.response?.data,
-          message: error.message,
-        });
-        return Promise.reject(error);
-      }
-    );
   }
 
   /**
-   * Make a generic RPC call
+   * Make a generic RPC call with fallback to next RPC if one fails
    */
   private async makeRPCCall(method: string, params: any[]): Promise<any> {
     const payload: RPCPayload = {
-      jsonrpc: '2.0',
+      jsonrpc: "2.0",
       method,
       params,
       id: this.requestId++,
     };
 
-    try {
-      const response: AxiosResponse = await this.client.post('', payload);
-      
-      if (response.data.error) {
-        throw new RPCError(`RPC Error: ${response.data.error.message || 'Unknown error'}`);
-      }
+    let lastError: Error | null = null;
 
-      return response.data.result;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        throw new RPCError(`RPC request failed: ${error.message}`);
+    for (const client of this.clients) {
+      try {
+        const response: AxiosResponse = await client.post("", payload);
+
+        if (response.data.error) {
+          throw new RPCError(
+            `RPC Error: ${response.data.error.message || "Unknown error"}`
+          );
+        }
+
+        return response.data.result; // success, return
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        logger.warn(`RPC call failed on ${client.defaults.baseURL}, trying next...`, {
+          method,
+          error: lastError.message,
+        });
       }
-      throw error;
     }
+
+    throw new RPCError(`All RPC calls failed. Last error: ${lastError?.message}`);
   }
 
   /**
