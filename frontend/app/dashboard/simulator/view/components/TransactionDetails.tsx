@@ -178,8 +178,8 @@ export default function TransactionDetails({ responseData, decodedTraceTree }: {
               <span className="text-sm text-gray-400">Gas Price</span>
               <span className="text-sm text-white">
                 {gasPriceInWei > 0 
-                  ? `${gasPriceInWei.toLocaleString()} Wei (${gasPriceInEth.toFixed(9)} ETH)`
-                  : "0 Wei (0 ETH)"
+                  ? `${gasPriceInWei.toLocaleString()} Wei (${gasPriceInEth.toFixed(9)} HYPE)`
+                  : "0 Wei (0 HYPE)"
                 }
               </span>
             </div>

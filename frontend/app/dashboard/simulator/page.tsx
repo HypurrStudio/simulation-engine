@@ -98,11 +98,11 @@ export default function SimulatorPage() {
     console.log("convertToHex input:", value, "type:", typeof value, "isDecimal:", isDecimal)
     
     if (isDecimal) {
-      // Convert decimal ETH value to hex (multiply by 10^18)
+      // Convert decimal HYPE value to hex (multiply by 10^18)
       const num = parseFloat(value)
       if (isNaN(num)) return "0x0"
       const result = "0x" + Math.floor(num * Math.pow(10, 18)).toString(16).toUpperCase()
-      console.log("ETH conversion:", num, "->", result)
+      console.log("HYPE conversion:", num, "->", result)
       return result
     } else {
       // Convert raw decimal number directly to hex (no multiplication)
@@ -143,7 +143,7 @@ export default function SimulatorPage() {
         from: formData.from,
         to: formData.to,
         input: formData.input,
-        value: convertToHex(formData.value, false), // Convert raw value directly to hex (no ETH conversion)
+        value: convertToHex(formData.value, false), // Convert raw value directly to hex (no HYPE conversion)
         gas: convertToHex(formData.gas, false),
         gasPrice: convertToHex(formData.gasPrice, false),
         generateAccessList: true,

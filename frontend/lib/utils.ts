@@ -75,7 +75,7 @@ export function formatValue(value: string): string {
   if (!value) return '0'
   const valueNum = parseInt(value, 16)
   if (valueNum === 0) return '0'
-  return `${(valueNum / 1e18).toFixed(9)} ETH`
+  return `${(valueNum / 1e18).toFixed(9)} HYPE`
 }
 
 export function getFunctionName(input: string): string {

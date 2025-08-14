@@ -22,10 +22,10 @@ export default function SummaryTab({ activeTab, responseData, decodedTraceTree }
         }
         
         const formatValue = (value: string) => {
-          if (!value || value === "0") return "0 ETH"
+          if (!value || value === "0") return "0 HYPE"
           const wei = BigInt(value)
           const eth = Number(wei) / 1e18
-          return `${eth.toFixed(6)} ETH`
+          return `${eth.toFixed(6)} HYPE`
         }
         
         const formatGas = (gas: string) => {
