@@ -6,7 +6,13 @@ import {
   } from "@/lib/utils";
 import { CheckCircle, XCircle } from "lucide-react";
 
-export default function TransactionDetails({ responseData }: { responseData: any }) {
+export default function TransactionDetails({ responseData, decodedTraceTree }: { responseData: any, decodedTraceTree: any }) {
+  const shortenHex = (hex: string, start = 18, end = 15) => {
+    if (!hex) return "";
+    if (hex.length <= start + end) return hex;
+    return `${hex.slice(0, start)}...${hex.slice(-end)}`;
+  };
+
   // Check for errors in the root callTrace
   const checkForErrors = () => {
     const rootTrace = responseData.transaction?.callTrace?.[0];
@@ -154,14 +160,7 @@ export default function TransactionDetails({ responseData }: { responseData: any
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-400">Function</span>
               <span className="text-sm text-white font-mono">
-                {
-                  decodeFunctionInput(
-                    responseData.transaction.input,
-                    responseData.transaction.to,
-                    responseData
-                  ).functionName
-                }
-                ()
+                {decodedTraceTree?.functionName}()
               </span>
             </div>
           </div>
@@ -215,7 +214,7 @@ export default function TransactionDetails({ responseData }: { responseData: any
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-400">Raw Input</span>
               <span className="text-sm text-white font-mono break-all text-right max-w-xs">
-                {responseData.transaction.input}
+                {shortenHex(responseData.transaction.input)}
               </span>
             </div>
           </div>
