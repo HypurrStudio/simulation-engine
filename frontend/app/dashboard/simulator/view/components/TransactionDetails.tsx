@@ -62,7 +62,7 @@ export default function TransactionDetails({ responseData }: { responseData: any
               <span className="text-sm text-gray-400">Network</span>
               <div className="flex items-center space-x-2">
                 <div className="w-4 h-4 bg-purple-500 rounded-full"></div>
-                <span className="text-sm text-white">HyperEVM mainnets</span>
+                <span className="text-sm text-white">HyperEVM Mainnet</span>
               </div>
             </div>
 
@@ -188,14 +188,14 @@ export default function TransactionDetails({ responseData }: { responseData: any
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-400">Gas Used</span>
               <span className="text-sm text-white">
-                {responseData.transaction.blockHeader?.gasUsed
+                {responseData?.transaction?.callTrace[0]?.gas_used
                   ? `${formatGas(
-                      responseData.transaction.blockHeader.gasUsed
+                      responseData?.transaction?.callTrace[0]?.gas_used
                     )} / ${formatGas(
                       responseData.transaction.gas
                     )} (${Math.round(
                       (parseInt(
-                        responseData.transaction.blockHeader.gasUsed,
+                        responseData?.transaction?.callTrace[0]?.gas_used,
                         16
                       ) /
                         parseInt(responseData.transaction.gas, 16)) *
