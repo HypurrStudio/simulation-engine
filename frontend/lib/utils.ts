@@ -103,8 +103,8 @@ export function getFunctionName(input: string): string {
 
 // Get contract names and ABI from response
 export const getContractName = (address: string, responseData?: any): string => {
-  if (responseData?.contracts && (responseData.contracts as any)[address]) {
-    return (responseData.contracts as any)[address].ContractName || address
+  if (responseData?.contracts && (responseData.contracts as any)[address.toLowerCase()]) {
+    return (responseData.contracts as any)[address.toLowerCase()].ContractName || address
   }
   return address
 }
