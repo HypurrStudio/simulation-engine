@@ -9,6 +9,7 @@ export function cn(...inputs: ClassValue[]) {
 export interface CallTraceItem {
   from: string
   to: string
+  error: string
   gas: string
   gas_used: string
   input: string
@@ -26,6 +27,7 @@ export interface DisplayTraceItem {
   gas: string
   gasUsed: string
   input: string
+  error: string
   output: string
   value: string
   subtraces: number
@@ -43,6 +45,7 @@ export function parseCallTrace(callTrace: CallTraceItem[], expanded: boolean = f
       to: item.to,
       gas: item.gas,
       gasUsed: item.gas_used,
+      error: item.error,
       input: item.input,
       output: item.output,
       value: item.value,

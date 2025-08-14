@@ -91,6 +91,7 @@ export default function SimulatorViewPage() {
               output: trace.output || "0x",
               gas: trace.gas,
               gasUsed: trace.gas_used,
+              error: trace.error || "",
               value: trace.value,
               calls: trace.calls ? trace.calls.map(convertCallTrace) : undefined,
             });

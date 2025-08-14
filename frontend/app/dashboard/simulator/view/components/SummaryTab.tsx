@@ -16,7 +16,7 @@ export default function SummaryTab({ activeTab, responseData, decodedTraceTree }
         const hasChildren = trace.children && trace.children.length > 0
         
         const getContractName = (address: string) => {
-          if (!contracts || !address) return address || 'Unknown'
+          if (!contracts || !address) return address || '0x'
           const contract = contracts[address.toLowerCase()]
           return contract?.ContractName || address
         }
@@ -76,7 +76,7 @@ export default function SummaryTab({ activeTab, responseData, decodedTraceTree }
                       <span className="text-gray-400">).</span>
                     </>
                   )}
-                  <span className="text-blue-300">{trace.functionName || 'unknown'}</span>
+                  <span className="text-blue-300">{trace.functionName || '0x'}</span>                 
                   {trace.signature && (
                     <span className="text-gray-400">
                       ({trace.signature})
@@ -107,11 +107,17 @@ export default function SummaryTab({ activeTab, responseData, decodedTraceTree }
                     output: {JSON.stringify(trace.outputDecoded)}
                   </div>
                 )}
-                
                 {/* Value transfer */}
                 {trace.value && trace.value !== "0" && (
                   <div className="text-gray-400 text-xs">
                     value: {formatValue(trace.value)}
+                  </div>
+                )}
+
+                {/* Error */}
+                {trace.error && trace.error != "" && (
+                  <div className="text-red-400 text-xs">
+                    error: {trace.error}
                   </div>
                 )}
               </div>

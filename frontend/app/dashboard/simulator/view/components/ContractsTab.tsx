@@ -40,7 +40,7 @@ export default function ContractsTab({ responseData }: {
                 />
                 <div>
                   <div className="text-white font-medium">
-                    {contract.ContractName || "Unknown"}
+                    {contract.ContractName || "0x"}
                   </div>
                   <div className="text-gray-400 text-sm font-mono">
                     {address}
