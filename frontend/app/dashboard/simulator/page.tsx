@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -8,8 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { useRouter } from "next/navigation"
+import { fetchContractABI, ContractABI, EtherscanFunction, getFunctionDisplayName, encodeFunctionCall } from "@/lib/etherscan"
 
 export default function SimulatorPage() {
   const router = useRouter()
@@ -28,6 +29,68 @@ export default function SimulatorPage() {
   const [overrideBlockNumber, setOverrideBlockNumber] = useState(false)
   const [transactionParamsExpanded, setTransactionParamsExpanded] = useState(true)
   const [blockHeaderExpanded, setBlockHeaderExpanded] = useState(true)
+
+  // New state for Etherscan integration
+  const [contractABI, setContractABI] = useState<ContractABI | null>(null)
+  const [isLoadingABI, setIsLoadingABI] = useState(false)
+  const [selectedFunction, setSelectedFunction] = useState<EtherscanFunction | null>(null)
+  const [functionParameters, setFunctionParameters] = useState<Array<{ name: string; type: string; value: string }>>([])
+
+  // Fetch ABI when contract address changes
+  useEffect(() => {
+    const fetchABI = async () => {
+      if (!formData.to.trim()) {
+        setContractABI(null)
+        setSelectedFunction(null)
+        setFunctionParameters([])
+        return
+      }
+
+      setIsLoadingABI(true)
+      try {
+        const abi = await fetchContractABI(formData.to)
+        setContractABI(abi)
+        setSelectedFunction(null)
+        setFunctionParameters([])
+      } catch (error) {
+        console.error('Error fetching ABI:', error)
+        setContractABI(null)
+      } finally {
+        setIsLoadingABI(false)
+      }
+    }
+
+    // Debounce the API call
+    const timeoutId = setTimeout(fetchABI, 1000)
+    return () => clearTimeout(timeoutId)
+  }, [formData.to])
+
+  // Update function parameters when function is selected
+  useEffect(() => {
+    if (selectedFunction) {
+      const params = selectedFunction.inputs.map((input, index) => ({
+        name: input.name || `param${index}`,
+        type: input.type,
+        value: ""
+      }))
+      setFunctionParameters(params)
+    } else {
+      setFunctionParameters([])
+    }
+  }, [selectedFunction])
+
+  // Update form input when function parameters change
+  useEffect(() => {
+    if (selectedFunction && functionParameters.length > 0 && contractABI) {
+      // Use proper function encoding
+      const encodedInput = encodeFunctionCall(selectedFunction.name, functionParameters, contractABI);
+      setFormData(prev => ({ ...prev, input: encodedInput }));
+    } else if (selectedFunction && functionParameters.length === 0 && contractABI) {
+      // Function with no parameters
+      const encodedInput = encodeFunctionCall(selectedFunction.name, [], contractABI);
+      setFormData(prev => ({ ...prev, input: encodedInput }));
+    }
+  }, [selectedFunction, functionParameters, contractABI]);
 
   const convertToHex = (value: string, isDecimal: boolean = false): string => {
     if (!value) return "0x0"
@@ -89,7 +152,7 @@ export default function SimulatorPage() {
 
       console.log("Request Body:", requestBody)
 
-      const response = await fetch("https://hypurrstudio.onrender.com/api/simulate", {
+      const response = await fetch("http://localhost:4000/api/simulate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -103,7 +166,7 @@ export default function SimulatorPage() {
 
       const responseData = await response.json()
       
-      // Store the response data in localStorage or pass it to the view page
+      // Store the full response data for the view page
       localStorage.setItem("simulationResponse", JSON.stringify(responseData))
       
       // Redirect to the view page
@@ -116,9 +179,22 @@ export default function SimulatorPage() {
     }
   }
 
+  const handleFunctionSelect = (functionName: string) => {
+    if (contractABI) {
+      const func = contractABI.functions.find(f => f.name === functionName)
+      setSelectedFunction(func || null)
+    }
+  }
+
+  const handleParameterChange = (index: number, value: string) => {
+    const updatedParams = [...functionParameters]
+    updatedParams[index].value = value
+    setFunctionParameters(updatedParams)
+  }
+
   // Check if left side is complete
   const isLeftSideComplete = formData.to.trim() !== "" && (
-    (inputType === "function") ||
+    (inputType === "function" && selectedFunction) ||
     (inputType === "raw" && formData.input.trim() !== "")
   )
 
@@ -141,14 +217,27 @@ export default function SimulatorPage() {
                   <Label className="text-secondary mb-2 block" style={{ color: 'var(--text-secondary)' }}>
                     Contract Address
                   </Label>
-                  <Input
-                    placeholder="0x..."
-                    value={formData.to}
-                    onChange={(e) => setFormData({ ...formData, to: e.target.value })}
-                    className="border"
-                    style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}
-                    required
-                  />
+                  <div className="relative">
+                    <Input
+                      placeholder="0x..."
+                      value={formData.to}
+                      onChange={(e) => setFormData({ ...formData, to: e.target.value })}
+                      className="border"
+                      style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}
+                      required
+                    />
+                    {isLoadingABI && (
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                        <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                      </div>
+                    )}
+                  </div>
+                  {contractABI && (
+                    <p className="text-xs text-green-400 mt-1">✓ Contract verified on Etherscan</p>
+                  )}
+                  {formData.to.trim() && !isLoadingABI && !contractABI && (
+                    <p className="text-xs text-yellow-400 mt-1">⚠ Contract not verified or not found</p>
+                  )}
                 </div>
 
                 <div>
@@ -157,10 +246,10 @@ export default function SimulatorPage() {
                   </Label>
                   <Select>
                     <SelectTrigger className="border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}>
-                      <SelectValue placeholder="Sepolia" />
+                      <SelectValue placeholder="HyperEVM Mainnet" />
                     </SelectTrigger>
                     <SelectContent className="border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
-                      <SelectItem value="sepolia">Sepolia</SelectItem>
+                      <SelectItem value="HyperEVM_Mainnet">HyperEVM Mainnet</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -203,37 +292,54 @@ export default function SimulatorPage() {
                         <Label className="text-secondary mb-2 block" style={{ color: 'var(--text-secondary)' }}>
                           Select function
                         </Label>
-                        <Select>
-                          <SelectTrigger className="border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}>
-                            <SelectValue placeholder="Select option" />
-                          </SelectTrigger>
-                          <SelectContent className="border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
-                            <SelectItem value="addFunds">addFunds</SelectItem>
-                            <SelectItem value="transfer">transfer</SelectItem>
-                            <SelectItem value="approve">approve</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        {isLoadingABI ? (
+                          <div className="flex items-center space-x-2 p-3 border rounded" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)' }}>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span className="text-sm text-gray-400">Loading functions...</span>
+                          </div>
+                        ) : contractABI ? (
+                          <Select onValueChange={handleFunctionSelect}>
+                            <SelectTrigger className="border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}>
+                              <SelectValue placeholder="Select a function" />
+                            </SelectTrigger>
+                            <SelectContent className="border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
+                              {contractABI.functions.map((func, index) => (
+                                <SelectItem key={index} value={func.name}>
+                                  {getFunctionDisplayName(func)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <div className="p-3 border rounded text-sm text-gray-400" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)' }}>
+                            Enter a verified contract address to load functions
+                          </div>
+                        )}
 
                         {/* Function Parameters - Only show when function is selected */}
-                        <div className="mt-4">
-                          <Label className="text-secondary mb-2 block" style={{ color: 'var(--text-secondary)' }}>
-                            Function Parameters
-                          </Label>
-                          <div className="space-y-2">
-                            <div>
-                              <Label className="text-xs text-gray-400 block mb-1">
-                                _transactionHash (bytes32)
-                              </Label>
-                              <Input 
-                                placeholder="Enter transaction hash"
-                                value={formData.input}
-                                onChange={(e) => setFormData({ ...formData, input: e.target.value })}
-                                className="border text-sm"
-                                style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}
-                              />
+                        {selectedFunction && functionParameters.length > 0 && (
+                          <div className="mt-4">
+                            <Label className="text-secondary mb-2 block" style={{ color: 'var(--text-secondary)' }}>
+                              Function Parameters
+                            </Label>
+                            <div className="space-y-2">
+                              {functionParameters.map((param, index) => (
+                                <div key={index}>
+                                  <Label className="text-xs text-gray-400 block mb-1">
+                                    {param.name} ({param.type})
+                                  </Label>
+                                  <Input 
+                                    placeholder={`Enter ${param.name}`}
+                                    value={param.value}
+                                    onChange={(e) => handleParameterChange(index, e.target.value)}
+                                    className="border text-sm"
+                                    style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}
+                                  />
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     )}
 
@@ -296,15 +402,6 @@ export default function SimulatorPage() {
                         style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}
                       />
                     </div>
-                    {/* <div>
-                      <Label className="text-secondary" style={{ color: 'var(--text-secondary)' }}>Tx Index</Label>
-                      <Input 
-                        placeholder="/"
-                        className="border"
-                        disabled={!isLeftSideComplete}
-                        style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}
-                      />
-                    </div> */}
                   </div>
                   
                   <div>
@@ -332,9 +429,6 @@ export default function SimulatorPage() {
                         style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}
                         required
                       />
-                      {/* <button className="text-xs mt-1 hover:underline" style={{ color: 'var(--color-primary)' }}>
-                        Use custom gas value
-                      </button> */}
                     </div>
                     <div>
                       <Label className="text-secondary" style={{ color: 'var(--text-secondary)' }}>Gas Price</Label>
@@ -365,84 +459,6 @@ export default function SimulatorPage() {
                 </CardContent>
               )}
             </Card>
-            
-            {/* <Card className="border" style={{ 
-              backgroundColor: 'rgba(30, 30, 30, 0.6)', 
-              borderColor: 'var(--border)', 
-              backdropFilter: 'blur(10px)',
-              opacity: isLeftSideComplete ? 1 : 0.5,
-              pointerEvents: isLeftSideComplete ? 'auto' : 'none'
-            }}>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-primary" style={{ color: 'var(--text-primary)' }}>Block Header Overrides</CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setBlockHeaderExpanded(!blockHeaderExpanded)}
-                  style={{ color: 'var(--text-secondary)' }}
-                  disabled={!isLeftSideComplete}
-                >
-                  {blockHeaderExpanded ? <ChevronUp /> : <ChevronDown />}
-                </Button>
-              </CardHeader>
-              {blockHeaderExpanded && (
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-secondary" style={{ color: 'var(--text-secondary)' }}>Override Block Number</Label>
-                    <Switch 
-                      checked={overrideBlockNumber}
-                      onCheckedChange={setOverrideBlockNumber}
-                      disabled={!isLeftSideComplete}
-                      style={{ backgroundColor: overrideBlockNumber ? 'var(--color-primary)' : 'var(--text-secondary)' }}
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label className="text-secondary" style={{ color: 'var(--text-secondary)' }}>Block Number</Label>
-                    <Input
-                      placeholder="/"
-                      className="border"
-                      disabled={!isLeftSideComplete}
-                      style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <Label className="text-secondary" style={{ color: 'var(--text-secondary)' }}>Override Timestamp</Label>
-                    <Switch 
-                      checked={false}
-                      disabled={!isLeftSideComplete}
-                      style={{ backgroundColor: 'var(--text-secondary)' }}
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label className="text-secondary" style={{ color: 'var(--text-secondary)' }}>Timestamp</Label>
-                    <Input
-                      placeholder="/"
-                      className="border"
-                      disabled={!isLeftSideComplete}
-                      style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}
-                    />
-                  </div>
-                </CardContent>
-              )}
-            </Card> */}
-            
-            {/* <Card className="border" style={{ 
-              backgroundColor: 'rgba(30, 30, 30, 0.6)', 
-              borderColor: 'var(--border)', 
-              backdropFilter: 'blur(10px)',
-              opacity: isLeftSideComplete ? 1 : 0.5,
-              pointerEvents: isLeftSideComplete ? 'auto' : 'none'
-            }}>
-              <CardHeader>
-                <CardTitle className="text-primary" style={{ color: 'var(--text-primary)' }}>State Overrides</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>No state overrides configured</p>
-              </CardContent>
-            </Card> */}
             
             <Button 
               type="submit"
