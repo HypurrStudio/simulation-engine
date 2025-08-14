@@ -69,7 +69,8 @@ export default function SummaryTab({ activeTab, responseData, decodedTraceTree }
                 <div className="text-blue-300">
                   {!isRoot && (
                     <>
-                      <span className="text-gray-400">([</span>
+                      <span className="text-gray-400">(</span>
+                      <span className="text-orange-400">[Receiver] </span>
                       <span className="text-white">{getContractName(trace.from)}</span>
                       <span className="text-gray-400"> =&gt; </span>
                       <span className="text-white">{getContractName(trace.to)}</span>

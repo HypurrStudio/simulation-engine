@@ -230,7 +230,7 @@ export default function SimulatorViewPage() {
       </div>
 
       {/* Middle Simulation Details Section */}
-      <TransactionDetails responseData={responseData} />
+      <TransactionDetails responseData={responseData} decodedTraceTree={decodedTraceTree} />
 
       {/* Bottom Content Section */}
       <div className="space-y-4">
