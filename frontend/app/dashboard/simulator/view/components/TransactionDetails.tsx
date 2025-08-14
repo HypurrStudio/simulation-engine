@@ -27,12 +27,12 @@ export default function TransactionDetails({ responseData, decodedTraceTree }: {
     }
     
     // Check if output indicates an error (empty output might indicate revert)
-    if (rootTrace.output === "0x" && rootTrace.gas_used === "0x0") {
-      return {
-        hasError: true,
-        message: "Transaction reverted"
-      };
-    }
+    // if (rootTrace.output === "0x" && rootTrace.gas_used === "0x0") {
+    //   return {
+    //     hasError: true,
+    //     message: "Transaction reverted"
+    //   };
+    // }
     
     return {
       hasError: false,
@@ -44,7 +44,7 @@ export default function TransactionDetails({ responseData, decodedTraceTree }: {
   const isSuccess = !errorInfo?.hasError;
 
   // Get gas price from transaction
-  console.log(responseData);
+  // console.log(responseData);
   const gasPrice = responseData.transaction?.gasPrice || "0x0";
   const gasPriceInWei = parseInt(gasPrice, 16);
   const gasPriceInEth = gasPriceInWei / 1e18;
@@ -161,7 +161,7 @@ export default function TransactionDetails({ responseData, decodedTraceTree }: {
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-400">Function</span>
               <span className="text-sm text-white font-mono">
-                {decodedTraceTree?.functionName}()
+                {decodedTraceTree?.functionName || decodedTraceTree?.functionSelector}()
               </span>
             </div>
           </div>
@@ -185,7 +185,7 @@ export default function TransactionDetails({ responseData, decodedTraceTree }: {
                       const feeWei = gasUsed * gasPrice;
                       const feeEth = feeWei / 1e18; // assuming HYPE uses 18 decimals like ETH
 
-                      return `${feeEth.toFixed(9)} HYPE`;
+                      return `${feeEth.toFixed(12)} HYPE`;
                     })()
                   : "Unknown"}
               </span>

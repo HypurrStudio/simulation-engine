@@ -64,7 +64,6 @@ export default function SummaryTab({ activeTab, responseData, decodedTraceTree }
                     <span className="text-white">{getContractName(trace.to)}</span>
                   </div>
                 )}
-                
                 {/* Function call details */}
                 <div className="text-blue-300">
                   {!isRoot && (
@@ -77,7 +76,7 @@ export default function SummaryTab({ activeTab, responseData, decodedTraceTree }
                       <span className="text-gray-400">).</span>
                     </>
                   )}
-                  <span className="text-blue-300">{trace.functionName || '0x'}</span>                 
+                  <span className="text-blue-300">{trace.functionName || trace.inputRaw || '0x'}</span>                 
                   {trace.signature && (
                     <span className="text-gray-400">
                       ({trace.signature})
@@ -216,7 +215,7 @@ export default function SummaryTab({ activeTab, responseData, decodedTraceTree }
                         ))}
                       </>
                     ) : (
-                      <span className="text-gray-500">  // No input parameters</span>
+                      <span className="text-gray-500">  // No decoded input parameters. </span>
                     )}
                     <code className="text-blue-300">{`}`}</code>
                   </pre>
