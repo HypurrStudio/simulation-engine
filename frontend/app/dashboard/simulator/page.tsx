@@ -152,7 +152,7 @@ export default function SimulatorPage() {
 
       console.log("Request Body:", requestBody)
 
-      const response = await fetch("http://localhost:4000/api/simulate", {
+      const response = await fetch("https://hypurrstudio.onrender.com/api/simulate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
