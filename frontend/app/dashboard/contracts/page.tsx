@@ -1,10 +1,230 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { RefreshCw, ChevronDown, Plus, Upload, CheckCircle, Info } from "lucide-react";
+import Image from "next/image";
+import { response as responseData } from "../../../response";
+
+/** @jsxImportSource react */
+interface ContractData {
+  address: string;
+  ContractName?: string;
+  Proxy?: string;
+  Implementation?: string;
+  ABI?: string;
+  SourceCode?: string;
+  CompilerVersion?: string;
+  EVMVersion?: string;
+}
+
 export default function ContractsPage() {
+  const [contracts, setContracts] = useState<ContractData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadContracts = async () => {
+      try {
+        setIsLoading(true);
+        const simulationResponse = localStorage.getItem("simulationResponse");
+        
+        let data;
+        // Temporarily force use static data to see all contracts
+        data = responseData;
+        console.log("FORCED: Using static response data");
+        
+        console.log("Raw contracts data:", data.contracts); // Debug log
+        console.log("Raw contracts data type:", typeof data.contracts);
+        console.log("Raw contracts data keys:", Object.keys(data.contracts));
+        console.log("Raw contracts data length:", Object.keys(data.contracts).length);
+        
+        if (data.contracts) {
+          console.log("Total contract keys:", Object.keys(data.contracts).length);
+          console.log("Contract keys:", Object.keys(data.contracts));
+          
+          const contractsList = Object.entries(data.contracts).map(([address, contract]: [string, any]) => {
+            console.log(`Processing contract ${address}:`, contract);
+            return {
+              address: address, // Use the key as address
+              ContractName: contract.ContractName || "Unknown Contract",
+              Proxy: contract.Proxy,
+              Implementation: contract.Implementation,
+              ABI: contract.ABI,
+              SourceCode: contract.SourceCode,
+              CompilerVersion: contract.CompilerVersion,
+              EVMVersion: contract.EVMVersion,
+            };
+          });
+          
+          console.log("Processed contracts:", contractsList.length, contractsList);
+          setContracts(contractsList);
+        } else {
+          console.log("No contracts found in data");
+        }
+      } catch (error) {
+        console.error("Error loading contracts:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadContracts();
+  }, []);
+
+  const getRandomLogo = (contract: ContractData) => {
+    // Generate a consistent random number based on contract address
+    const hash = contract.address.slice(2).split('').reduce((a, b) => {
+      a = ((a << 5) - a + b.charCodeAt(0)) & 0xffffffff;
+      return a;
+    }, 0);
+    
+    // Use the hash to select a random shape (1-8)
+    const shapeNumber = (Math.abs(hash) % 8) + 1;
+    return `/shapes/shape${shapeNumber}.png`;
+  };
+
+  const getNetworkInfo = () => {
+    return {
+      name: "HyperEVM Mainnet",
+      icon: "🔵", // Ethereum-like icon
+      color: "text-blue-400"
+    };
+  };
+
+  const getVerificationStatus = (contract: ContractData) => {
+    // Only show "Public" if SourceCode is non-empty
+    if (contract.SourceCode && contract.SourceCode.trim() !== "") {
+      return {
+        status: "Public",
+        color: "text-green-400",
+        icon: <CheckCircle className="h-4 w-4" />
+      };
+    }
+    return {
+      status: "Unverified",
+      color: "text-gray-400",
+      icon: <Info className="h-4 w-4" />
+    };
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
+          <div className="text-white">Loading contracts...</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div>
-      <h1 className="text-3xl font-bold mb-4">Contracts</h1>
-      <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-        Contracts content will appear here.
-      </p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold text-white">Contracts</h1>
+        
+      
+      </div>
+
+      
+
+      {/* Contracts Table */}
+      <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-800 border-b border-gray-700">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  Contract
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  Network
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                  Verification
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-700">
+              {contracts.length > 0 ? (
+                contracts.map((contract, index) => {
+                  const networkInfo = getNetworkInfo();
+                  const verificationInfo = getVerificationStatus(contract);
+                  
+                  return (
+                    <tr 
+                      key={contract.address} 
+                      className="hover:bg-gray-800 cursor-pointer"
+                      onClick={() => window.location.href = `/dashboard/contracts/${contract.address}`}
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center ">
+                            <Image
+                              src={getRandomLogo(contract)}
+                              alt="Contract Logo"
+                              width={32}
+                              height={32}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div>
+                            <div className="text-sm font-medium text-white">
+                              {contract.ContractName || "Unknown Contract"}
+                            </div>
+                            <div className="text-sm text-gray-400 font-mono">
+                              {contract.address}
+                            </div>
+                            {contract.Proxy === "1" && contract.Implementation && (
+                              <div className="text-xs text-purple-400">
+                                Proxy → {contract.Implementation.slice(0, 10)}...{contract.Implementation.slice(-8)}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-lg">{networkInfo.icon}</span>
+                          <span className={`text-sm ${networkInfo.color}`}>
+                            {networkInfo.name}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center space-x-2">
+                          <span className={`${verificationInfo.color}`}>
+                            {verificationInfo.icon}
+                          </span>
+                          <span className={`text-sm ${verificationInfo.color}`}>
+                            {verificationInfo.status}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={3} className="px-6 py-12 text-center">
+                    <div className="text-gray-400">
+                      <div className="text-lg mb-2">No contracts found</div>
+                      <div className="text-sm">Run a simulation first to see contracts</div>
+                      <Button 
+                        onClick={() => window.location.href = '/dashboard/simulator'} 
+                        className="mt-4 bg-purple-600 hover:bg-purple-700"
+                      >
+                        Go to Simulator
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
-  )
+  );
 } 

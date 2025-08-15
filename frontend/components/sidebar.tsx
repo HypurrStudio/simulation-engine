@@ -12,7 +12,7 @@ export function Sidebar() {
 
   const subItems = [
     { href: "/dashboard/transactions",  label: "Transactions", disabled: true },
-    { href: "/dashboard/contracts",     label: "Contracts", disabled: true },
+    { href: "/dashboard/contracts",     label: "Contracts", disabled: false },
     { href: "/dashboard/simulator",     label: "Simulator", disabled: false },
   ]
 
