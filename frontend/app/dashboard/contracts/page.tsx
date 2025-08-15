@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, ChevronDown, Plus, Upload, CheckCircle, Info } from "lucide-react";
 import Image from "next/image";
-import { response as responseData } from "../../../response";
 
 /** @jsxImportSource react */
 interface ContractData {
@@ -21,6 +20,7 @@ interface ContractData {
 export default function ContractsPage() {
   const [contracts, setContracts] = useState<ContractData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasSimulationData, setHasSimulationData] = useState(false);
 
   useEffect(() => {
     const loadContracts = async () => {
@@ -28,41 +28,36 @@ export default function ContractsPage() {
         setIsLoading(true);
         const simulationResponse = localStorage.getItem("simulationResponse");
         
-        let data;
-        // Temporarily force use static data to see all contracts
-        data = responseData;
-        console.log("FORCED: Using static response data");
-        
-        console.log("Raw contracts data:", data.contracts); // Debug log
-        console.log("Raw contracts data type:", typeof data.contracts);
-        console.log("Raw contracts data keys:", Object.keys(data.contracts));
-        console.log("Raw contracts data length:", Object.keys(data.contracts).length);
-        
-        if (data.contracts) {
-          console.log("Total contract keys:", Object.keys(data.contracts).length);
-          console.log("Contract keys:", Object.keys(data.contracts));
+        if (simulationResponse) {
+          const data = JSON.parse(simulationResponse);
+          setHasSimulationData(true);
           
-          const contractsList = Object.entries(data.contracts).map(([address, contract]: [string, any]) => {
-            console.log(`Processing contract ${address}:`, contract);
-            return {
-              address: address, // Use the key as address
-              ContractName: contract.ContractName || "Unknown Contract",
-              Proxy: contract.Proxy,
-              Implementation: contract.Implementation,
-              ABI: contract.ABI,
-              SourceCode: contract.SourceCode,
-              CompilerVersion: contract.CompilerVersion,
-              EVMVersion: contract.EVMVersion,
-            };
-          });
-          
-          console.log("Processed contracts:", contractsList.length, contractsList);
-          setContracts(contractsList);
+          if (data.contracts) {
+            const contractsList = Object.entries(data.contracts).map(([address, contract]: [string, any]) => {
+              return {
+                address: address,
+                ContractName: contract.ContractName || "Unknown Contract",
+                Proxy: contract.Proxy,
+                Implementation: contract.Implementation,
+                ABI: contract.ABI,
+                SourceCode: contract.SourceCode,
+                CompilerVersion: contract.CompilerVersion,
+                EVMVersion: contract.EVMVersion,
+              };
+            });
+            
+            setContracts(contractsList);
+          } else {
+            setContracts([]);
+          }
         } else {
-          console.log("No contracts found in data");
+          setHasSimulationData(false);
+          setContracts([]);
         }
       } catch (error) {
         console.error("Error loading contracts:", error);
+        setHasSimulationData(false);
+        setContracts([]);
       } finally {
         setIsLoading(false);
       }
@@ -141,13 +136,28 @@ export default function ContractsPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                   Network
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-xs font-medium text-gray-300 uppercase tracking-wider">
                   Verification
                 </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700">
-              {contracts.length > 0 ? (
+              {!hasSimulationData ? (
+                <tr>
+                  <td colSpan={3} className="px-6 py-12 text-center">
+                    <div className="text-gray-400">
+                      <div className="text-lg mb-2">No simulation data found</div>
+                      <div className="text-sm">Run a simulation first to see contracts</div>
+                      <Button 
+                        onClick={() => window.location.href = '/dashboard/simulator'} 
+                        className="mt-4 bg-purple-600 hover:bg-purple-700"
+                      >
+                        Go to Simulator
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ) : contracts.length > 0 ? (
                 contracts.map((contract, index) => {
                   const networkInfo = getNetworkInfo();
                   const verificationInfo = getVerificationStatus(contract);
@@ -210,12 +220,12 @@ export default function ContractsPage() {
                   <td colSpan={3} className="px-6 py-12 text-center">
                     <div className="text-gray-400">
                       <div className="text-lg mb-2">No contracts found</div>
-                      <div className="text-sm">Run a simulation first to see contracts</div>
+                      <div className="text-sm">The simulation didn't return any contracts</div>
                       <Button 
                         onClick={() => window.location.href = '/dashboard/simulator'} 
                         className="mt-4 bg-purple-600 hover:bg-purple-700"
                       >
-                        Go to Simulator
+                        Run New Simulation
                       </Button>
                     </div>
                   </td>
