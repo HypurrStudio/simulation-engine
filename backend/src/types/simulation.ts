@@ -64,6 +64,7 @@ export interface TransactionObject {
   callTrace: CallTrace[];
   balanceDiff: BalanceDiff;
   storageDiff: StorageDiff;
+  events: Events[];
 }
 
 export interface GeneratedAccessList {
@@ -103,17 +104,22 @@ export interface CallTrace {
   value: string;
   error?: string;
   calls?: CallTrace[];
+  logs?: Events[];
 }
 
-export type StateDiff = Record<
-  string,
-  {
-    balance: '=' | { '*': { from: string; to: string } };
-    code: string | { '*': { from: string; to: string } };
-    nonce: '=' | { '*': { from: string; to: string } };
-    storage: Record<string, '=' | { '*': { from: string; to: string } }>;
-  }
->;
+export type AccountState = {
+  balance?: string; // hex string like "0x..."
+  nonce?: number | string; // can be numeric or hex
+  code?: string; // optional code hash or bytecode
+  storage?: Record<string, string>; // mapping slot => hex value
+};
+
+export type StateSnapshot = Record<string, AccountState>;
+
+export interface TraceStateDiff {
+  pre: StateSnapshot;
+  post: StateSnapshot;
+}
 
 export interface StorageDiff {
   [address: string]: {
@@ -127,4 +133,11 @@ export interface BalanceDiff {
 export interface SimulationError {
   message: string;
   reason?: string;
+}
+
+export interface Events {
+  index: number;
+  address: string;
+  topics: string[];
+  data: string;
 }
