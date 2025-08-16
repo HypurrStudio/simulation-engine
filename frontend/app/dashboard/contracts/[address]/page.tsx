@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { ethers } from "ethers";
 import { MoreHorizontal, Share, Bell, Play, CheckCircle } from "lucide-react";
 import Image from "next/image";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -31,6 +32,19 @@ export default function ContractDetailsPage({
   const [activeSourceFile, setActiveSourceFile] = useState<string>("");
   const [parsedSourceCode, setParsedSourceCode] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [balance, setBalance] = useState<string>("0.00");
+
+  const fetchBalance = async (address: string) => {
+    try {
+      const provider = new ethers.JsonRpcProvider(process.env.NEXT_HYPEREVM_RPC_URL);
+      const balanceWei = await provider.getBalance(address);
+      const balanceEth = ethers.formatEther(balanceWei);
+      setBalance(parseFloat(balanceEth).toFixed(4));
+    } catch (error) {
+      console.error("Error fetching balance:", error);
+      setBalance("0.00");
+    }
+  };
 
   useEffect(() => {
     const loadContract = async () => {
@@ -44,6 +58,7 @@ export default function ContractDetailsPage({
           if (data.contracts && (data.contracts as any)[params.address]) {
             // Type casting for indexing
             const contractData = (data.contracts as any)[params.address];
+            await fetchBalance(params.address);
             setContract({
               address: params.address,
               ContractName: contractData.ContractName || "Unknown Contract",
@@ -73,13 +88,13 @@ export default function ContractDetailsPage({
                 }
 
                 const parsed = JSON.parse(sourceCodeToParse);
-                console.log("Parsed source code:", parsed);
+                // console.log("Parsed source code:", parsed);
                 if (parsed.sources && typeof parsed.sources === "object") {
-                  console.log("Sources found:", Object.keys(parsed.sources));
+                  // console.log("Sources found:", Object.keys(parsed.sources));
                   setParsedSourceCode(parsed);
                   // Set the first file as active
                   const firstFile = Object.keys(parsed.sources)[0];
-                  console.log("First file:", firstFile);
+                  // console.log("First file:", firstFile);
                   setActiveSourceFile(firstFile);
                 }
               } catch (e) {
@@ -163,10 +178,10 @@ export default function ContractDetailsPage({
   }
 
   // TEST MESSAGE - REMOVE THIS LATER
-  console.log("CONTRACT DETAILS PAGE LOADED!");
-  console.log("Contract:", contract);
-  console.log("Active tab:", activeTab);
-  console.log("Active sub tab:", activeSubTab);
+  // console.log("CONTRACT DETAILS PAGE LOADED!");
+  // console.log("Contract:", contract);
+  // console.log("Active tab:", activeTab);
+  // console.log("Active sub tab:", activeSubTab);
 
   const verificationInfo = getVerificationStatus(contract);
 
@@ -244,8 +259,8 @@ export default function ContractDetailsPage({
               </div>
             )}
             <div className="flex justify-between">
-              <span className="text-gray-400">ETH Balance:</span>
-              <span className="text-white">0.00 ETH</span>
+              <span className="text-gray-400">HYPE Balance:</span>
+              <span className="text-white">{balance} HYPE</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-400">Deployment Address:</span>
@@ -253,16 +268,16 @@ export default function ContractDetailsPage({
                 {contract.address}
               </span>
             </div>
-            <div className="flex justify-between">
+            {/* <div className="flex justify-between">
               <span className="text-gray-400">Deployment Transaction:</span>
               <span className="text-white font-mono text-sm">
                 0x6dbef6...47274a
               </span>
-            </div>
-            <div className="flex justify-between">
+            </div> */}
+            {/* <div className="flex justify-between">
               <span className="text-gray-400">Deployment Timestamp:</span>
               <span className="text-white">18/06/2025 13:48:48 UTC</span>
-            </div>
+            </div> */}
           </div>
         </div>
 
@@ -279,10 +294,10 @@ export default function ContractDetailsPage({
             Verification Details
           </h3>
           <div className="space-y-2">
-            <div className="flex justify-between">
+            {/* <div className="flex justify-between">
               <span className="text-gray-400">Verification timestamp:</span>
               <span className="text-white">06/08/2025 06:27:41 UTC</span>
-            </div>
+            </div> */}
             <div className="flex justify-between">
               <span className="text-gray-400">Optimizations:</span>
               <span className="text-white">
@@ -301,10 +316,10 @@ export default function ContractDetailsPage({
                   : "Private"}
               </span>
             </div>
-            <div className="flex justify-between">
+            {/* <div className="flex justify-between">
               <span className="text-gray-400">Solidity version:</span>
               <span className="text-white">^0.8.22</span>
-            </div>
+            </div> */}
             <div className="flex justify-between">
               <span className="text-gray-400">Compiler:</span>
               <span className="text-white">
@@ -329,8 +344,9 @@ export default function ContractDetailsPage({
           style={{ borderColor: "var(--border)" }}
         >
           {[
-            { id: "transactions", label: "Transactions" },
+            
             { id: "source", label: "Source code" },
+            { id: "transactions", label: "Transactions" },
             { id: "readwrite", label: "Read/Write" },
           ].map((tab) => (
             <button

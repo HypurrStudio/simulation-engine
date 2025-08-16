@@ -147,7 +147,7 @@ export default function SimulatorPage() {
         gas: convertToHex(formData.gas, false),
         gasPrice: convertToHex(formData.gasPrice, false),
         generateAccessList: true,
-        blockNumber: convertToHex(formData.blockNumber, false)
+        blockNumber: formData.blockNumber ? convertToHex(formData.blockNumber, false) : "latest"
       }
 
       console.log("Request Body:", requestBody)
