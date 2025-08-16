@@ -16,11 +16,21 @@ export interface RPCCallParam {
 
 export interface RPCTraceParam {
   tracer: string;
-  enableMemory: boolean;
-  enableReturnData: boolean;
-  disableStack: boolean;
-  disableStorage: boolean;
-  stateOverrides: any;
+  tracerConfig?: {
+    onlyTopCall?: boolean;
+    withLog?: boolean;
+    diffMode?: boolean;
+    disableCode?: boolean;
+    disableStorage?: boolean;
+  };
+  stateOverrides?: {
+    [address: string]: {
+      balance?: string;
+      code?: string;
+      state?: Record<string, string>;
+      stateDiff?: Record<string, string>;
+    };
+  };
 }
 
 export interface RPCPayload {
@@ -161,7 +171,7 @@ export class RPCService {
   async traceCall(
     callParams: RPCCallParam,
     blockNumber: string | number = 'latest',
-    traceParams: string[]
+    tracerParams: RPCTraceParam 
   ): Promise<TraceResult> {
     logger.info('Tracing transaction call', {
       from: callParams.from,
@@ -172,13 +182,13 @@ export class RPCService {
     logger.info('Trace parameters', {
       callParams,
       blockNumber: this.toHex(blockNumber),
-      traceParams,
+      tracerParams,
     });
 
-    const result = await this.makeRPCCall('trace_call', [
+    const result = await this.makeRPCCall('debug_traceCall', [
       callParams,
-      traceParams,
       this.toHex(blockNumber),
+      tracerParams,
     ]);
 
     return result;
