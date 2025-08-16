@@ -23,6 +23,88 @@ import contractMetadataService from './contractMetadataService';
  */
 export class SimulationService {
   /**
+   * Get transaction by hash and trace it
+   */
+  async traceTransaction(request: SimulationRequest, txHash: string): Promise<SimulationResponse> {
+    const traceId = uuidv4();
+    
+    logger.info('Starting transaction trace', {
+      traceId,
+      from: request.from,
+      to: request.to
+    });
+
+    try {
+      // Validate required fields
+      this.validateRequest(request);
+
+      // Prepare trace parameters
+      const callTracerParams = this.prepareCallTracerParams(request);
+
+      // Execute trace
+      const callTraceResult = await rpcService.traceCallTx(
+        txHash,
+        callTracerParams
+      );
+
+      // Prepare prestate trace parameters
+      const prestateTracerParams = this.preparePrestateTracerParams(request);
+
+      // Execute trace
+      const prestateTraceResult = await rpcService.traceCallTx(
+        txHash,
+        prestateTracerParams
+      );
+
+      const logs = this.parseEvents([callTraceResult] as unknown as CallTrace[]);
+
+      // Process results
+      const callTrace = callTraceResult as unknown as CallTrace;
+      const contractAddresses = this.collectContractAddresses([callTrace], request.to);
+
+      const [blockHeaderResult, contractsMetadataResult] = await Promise.allSettled([
+        this.fetchBlockHeader(request.blockNumber || 'latest'),
+        this.fetchContractMetadata(contractAddresses, config.hyperEvmChainId.toString())
+      ]);
+
+      const blockHeader = blockHeaderResult.status === "fulfilled" ? blockHeaderResult.value : null;
+      const contractsMetadata = contractsMetadataResult.status === "fulfilled" ? contractsMetadataResult.value : [];
+
+      const {storageDiff, balanceDiff} = this.splitStateDiff(prestateTraceResult as unknown as TraceStateDiff);
+
+      // Build response
+      const response = this.buildSimulationResponse(
+        request,
+        callTraceResult,
+        [callTrace],
+        [],
+        storageDiff,
+        balanceDiff,
+        blockHeader,
+        contractsMetadata,
+        logs,
+        traceId
+      );
+
+      // logger.info('Transaction trace completed successfully', {
+      //   traceId,
+      //   gasUsed: response.trace.gas_used,
+      //   status: response.trace.status,
+      // });
+
+      return response;
+    } catch (error: any) {
+      logger.error('Transaction trace failed', {
+        traceId,
+        error: error?.message,
+        stack: error?.stack,
+      });
+
+      throw new SimulationError(`trace failed: ${error?.message}`);
+    }
+  }
+
+  /**
    * Main simulation method
    */
   async simulateTransaction(request: SimulationRequest): Promise<SimulationResponse> {
@@ -43,7 +125,7 @@ export class SimulationService {
       const callTracerParams = this.prepareCallTracerParams(request);
 
       // Execute simulation
-      const callTraceResult = await rpcService.traceCall(
+      const callTraceResult = await rpcService.traceCallSimulate(
         callParams,
         request.blockNumber || 'latest',
         callTracerParams
@@ -53,7 +135,7 @@ export class SimulationService {
       const prestateTracerParams = this.preparePrestateTracerParams(request);
 
       // Execute simulation
-      const prestateTraceResult = await rpcService.traceCall(
+      const prestateTraceResult = await rpcService.traceCallSimulate(
         callParams,
         request.blockNumber || 'latest',
         prestateTracerParams

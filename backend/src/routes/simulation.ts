@@ -8,7 +8,7 @@ import { SimulationRequest } from '../types/simulation';
 const router = Router();
 
 /**
- * POST /api/simulation/simulate
+ * POST /api/simulate
  * Simulate a transaction
  */
 router.post('/simulate', asyncHandler(async (req: Request, res: Response) => {

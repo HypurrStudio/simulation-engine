@@ -9,6 +9,7 @@ import config from './config';
 import logger, { stream } from './utils/logger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import simulationRoutes from './routes/simulation';
+import traceRoutes from './routes/trace';
 import { rpcService } from './services/RPCService';
 
 /**
@@ -88,6 +89,7 @@ class App {
 
     // API routes
     this.app.use('/api', simulationRoutes);
+    this.app.use('/api/trace', traceRoutes);
 
     // Root endpoint
     this.app.get('/', (req, res) => {

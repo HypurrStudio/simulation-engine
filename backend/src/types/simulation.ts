@@ -20,7 +20,7 @@ export interface SimulationRequest {
     number: string;
     timestamp: string;
   };
-  blockNumber?: number | null;
+  blockNumber?: number | string;
   transactionIndex?: number;
   accessList?: AccessListResult['accessList'];
 }

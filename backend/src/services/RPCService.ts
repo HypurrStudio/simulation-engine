@@ -62,6 +62,16 @@ export interface BlockHeader {
   [key: string]: any;
 }
 
+export interface TransactionResponse {
+  from?: string;
+  to?: string;
+  input?: string;
+  value?: string;
+  gas?: string;
+  gasPrice?: string;
+  blockNumber?: number | null;
+}
+
 export interface AccessListResult {
   accessList: Array<{
     address: string;
@@ -168,7 +178,7 @@ export class RPCService {
   /**
    * Trace a transaction call
    */
-  async traceCall(
+  async traceCallSimulate(
     callParams: RPCCallParam,
     blockNumber: string | number = 'latest',
     tracerParams: RPCTraceParam 
@@ -195,6 +205,30 @@ export class RPCService {
   }
 
   /**
+   * Trace a transaction hash
+   */
+  async traceCallTx(
+    txHash: string,
+    tracerParams: RPCTraceParam 
+  ): Promise<TraceResult> {
+    logger.info('Tracing transaction hash', {
+      txHash: txHash
+    });
+
+    logger.info('Trace parameters', {
+      txHash,
+      tracerParams,
+    });
+
+    const result = await this.makeRPCCall('debug_traceTransaction', [
+      txHash,
+      tracerParams,
+    ]);
+
+    return result;
+  }
+
+  /**
    * Get block information
    */
   async getBlockByNumber(blockNumber: string | number, includeTransactions: boolean = false): Promise<BlockHeader> {
@@ -203,6 +237,19 @@ export class RPCService {
     const result = await this.makeRPCCall('eth_getBlockByNumber', [
       this.toHex(blockNumber),
       includeTransactions,
+    ]);
+
+    return result;
+  }
+
+  /**
+   * Get tx 
+   */
+  async getTransactionByHash(txHash: string): Promise<TransactionResponse> {
+    logger.info('Fetching tx information', { txHash });
+
+    const result = await this.makeRPCCall('eth_getTransactionByHash', [
+      txHash
     ]);
 
     return result;
