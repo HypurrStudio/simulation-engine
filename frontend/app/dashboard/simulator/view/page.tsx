@@ -106,6 +106,8 @@ export default function SimulatorViewPage() {
               // Store the decoded trace for display
               setDecodedTraceTree(decodedData);
 
+              console.log("decodedData", decodedData);
+
               const logNode = (node: any, level: number = 0, index: number = 0) => {
                 const indent = "  ".repeat(level);
                 const prefix = level === 0 ? "ROOT" : `${index}`;
