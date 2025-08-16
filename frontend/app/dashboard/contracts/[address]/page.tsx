@@ -27,7 +27,7 @@ export default function ContractDetailsPage({
   params: { address: string };
 }) {
   const [contract, setContract] = useState<ContractData | null>(null);
-  const [activeTab, setActiveTab] = useState("transactions");
+  const [activeTab, setActiveTab] = useState("source");
   const [activeSubTab, setActiveSubTab] = useState("source-code");
   const [activeSourceFile, setActiveSourceFile] = useState<string>("");
   const [parsedSourceCode, setParsedSourceCode] = useState<any>(null);
