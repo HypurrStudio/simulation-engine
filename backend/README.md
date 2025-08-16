@@ -2,6 +2,23 @@
 
 A production-grade backend service for simulating Ethereum transactions on HyperEVM networks.
 
+## 🚀 Next-Generation Anvil-Based Simulation
+
+This project now includes a next-generation simulation engine that uses local Anvil forked nodes instead of external RPC calls. This provides better reliability, performance, and control over the simulation environment.
+
+**New Features:**
+- **Local Anvil Instances**: Spawns in-memory Anvil nodes for each simulation
+- **Automatic Resource Management**: Automatically cleans up idle instances
+- **High Availability**: Multiple RPC URL fallback for forking
+- **Instance Reuse**: Reuses instances with the same fork URL for efficiency
+
+**API Endpoints:**
+- `POST /api/v2/simulate` - Anvil-based simulation
+- `GET /api/v2/health` - Anvil service health check
+- `GET /api/v2/stats` - Anvil instance statistics
+
+For detailed documentation on the Anvil-based system, see [README_ANVIL.md](./README_ANVIL.md).
+
 ## Features
 
 - **Transaction Simulation**: Simulate transactions with detailed call traces
@@ -60,7 +77,21 @@ Create a `.env` file with the following variables:
 ```env
 NODE_ENV=development
 PORT=4000
-HYPEREVM_RPC_URL=https://sepolia.drpc.org
+
+# HyperEVM RPC Configuration (comma-separated for fallback)
+HYPEREVM_RPC_URLS=https://sepolia.drpc.org,https://eth-sepolia.g.alchemy.com/v2/your_key
+HYPEREVM_CHAIN_ID=11155111
+ETHERSCAN_API_KEY=your_api_key
+
+# Anvil Configuration (for v2 simulation)
+ANVIL_PORT_START=8545
+ANVIL_PORT_END=8645
+ANVIL_STARTUP_TIMEOUT_MS=10000
+ANVIL_MAX_INSTANCES=10
+ANVIL_BLOCK_TIME=1
+ANVIL_GAS_LIMIT=30000000
+
+# Other configurations
 LOG_LEVEL=info
 RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=100
@@ -117,6 +148,9 @@ npm test
 
 # Run tests in watch mode
 npm run test:watch
+
+# Test Anvil-based simulation
+npm run test:anvil
 
 # Lint code
 npm run lint

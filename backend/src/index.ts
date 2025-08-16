@@ -9,7 +9,9 @@ import config from './config';
 import logger, { stream } from './utils/logger';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 import simulationRoutes from './routes/simulation';
+import anvilSimulationRoutes from './routes/anvilSimulation';
 import { rpcService } from './services/RPCService';
+import anvilManager from './services/anvilManager';
 
 /**
  * Application Class
@@ -88,6 +90,7 @@ class App {
 
     // API routes
     this.app.use('/api', simulationRoutes);
+    this.app.use('/api/v2', anvilSimulationRoutes);
 
     // Root endpoint
     this.app.get('/', (req, res) => {
@@ -97,6 +100,7 @@ class App {
         endpoints: {
           health: '/health',
           simulation: '/api',
+          anvilSimulation: '/api/v2',
         },
       });
     });
@@ -141,15 +145,22 @@ class App {
 }
 
 // Graceful shutdown handling
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received, shutting down gracefully');
+const gracefulShutdown = async (signal: string) => {
+  logger.info(`${signal} received, shutting down gracefully`);
+  
+  try {
+    // Clean up Anvil instances
+    await anvilManager.cleanupAll();
+    logger.info('Anvil instances cleaned up');
+  } catch (error: any) {
+    logger.error('Error during graceful shutdown', { error: error.message });
+  }
+  
   process.exit(0);
-});
+};
 
-process.on('SIGINT', () => {
-  logger.info('SIGINT received, shutting down gracefully');
-  process.exit(0);
-});
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Unhandled promise rejection handler
 process.on('unhandledRejection', (reason, promise) => {

@@ -17,6 +17,12 @@ const envSchema = Joi.object({
   CORS_ORIGIN: Joi.string().default('*'),
   REQUEST_TIMEOUT_MS: Joi.number().default(30000),
   MAX_REQUEST_SIZE: Joi.string().default('10mb'),
+  ANVIL_PORT_START: Joi.number().default(8545),
+  ANVIL_PORT_END: Joi.number().default(8645),
+  ANVIL_STARTUP_TIMEOUT_MS: Joi.number().default(10000),
+  ANVIL_MAX_INSTANCES: Joi.number().default(10),
+  ANVIL_BLOCK_TIME: Joi.number().default(1),
+  ANVIL_GAS_LIMIT: Joi.number().default(30000000),
 }).unknown();
 
 // Validate environment variables
@@ -45,6 +51,14 @@ export interface Config {
     timeoutMs: number;
     maxSize: string;
   };
+  anvil: {
+    portStart: number;
+    portEnd: number;
+    startupTimeoutMs: number;
+    maxInstances: number;
+    blockTime: number;
+    gasLimit: number;
+  };
 }
 
 // Export configuration object
@@ -65,6 +79,14 @@ export const config: Config = {
   request: {
     timeoutMs: envVars.REQUEST_TIMEOUT_MS,
     maxSize: envVars.MAX_REQUEST_SIZE,
+  },
+  anvil: {
+    portStart: envVars.ANVIL_PORT_START,
+    portEnd: envVars.ANVIL_PORT_END,
+    startupTimeoutMs: envVars.ANVIL_STARTUP_TIMEOUT_MS,
+    maxInstances: envVars.ANVIL_MAX_INSTANCES,
+    blockTime: envVars.ANVIL_BLOCK_TIME,
+    gasLimit: envVars.ANVIL_GAS_LIMIT,
   },
 };
 

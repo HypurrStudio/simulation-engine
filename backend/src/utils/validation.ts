@@ -41,7 +41,7 @@ export const valueSchema = Joi.string()
 
 export const networkIdSchema = Joi.string()
   .pattern(/^\d+$/)
-  .default('11155111')
+  .default('999')
   .messages({
     'string.pattern.base': 'Network ID must be a numeric string',
   });
@@ -76,7 +76,7 @@ export const simulationRequestSchema = Joi.object({
     })
   ).optional(),
   generateAccessList: Joi.boolean().default(false),
-  networkId: networkIdSchema,
+  // networkId: networkIdSchema,
   blockHeader: Joi.object({
     number: Joi.string().required(),
     timestamp: Joi.string().required(),
@@ -102,6 +102,7 @@ export const validateRequest = <T>(schema: Joi.Schema, data: any): T => {
     const errorMessage = error.details
       .map((detail) => detail.message)
       .join(', ');
+    console.log(errorMessage);
     throw new ValidationError(errorMessage);
   }
 
