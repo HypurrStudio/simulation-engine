@@ -26,14 +26,14 @@ export default function ContractsPage() {
     const loadContracts = async () => {
       try {
         setIsLoading(true);
-        const simulationResponse = localStorage.getItem("simulationResponse");
+        const contractsData = localStorage.getItem("contractsStorage");
         
-        if (simulationResponse) {
-          const data = JSON.parse(simulationResponse);
+        if (contractsData) {
+          const data = JSON.parse(contractsData);
           setHasSimulationData(true);
           
-          if (data.contracts) {
-            const contractsList = Object.entries(data.contracts).map(([address, contract]: [string, any]) => {
+          if (data && Object.keys(data).length > 0) {
+            const contractsList = Object.entries(data).map(([address, contract]: [string, any]) => {
               return {
                 address: address,
                 ContractName: contract.ContractName || "Unknown Contract",
@@ -81,25 +81,30 @@ export default function ContractsPage() {
   const getNetworkInfo = () => {
     return {
       name: "HyperEVM Mainnet",
-      icon: "🔵", // Ethereum-like icon
-      color: "text-blue-400"
+      icon: "🌐",
+      color: "text-blue-400",
     };
   };
 
   const getVerificationStatus = (contract: ContractData) => {
-    // Only show "Public" if SourceCode is non-empty
     if (contract.SourceCode && contract.SourceCode.trim() !== "") {
       return {
         status: "Public",
+        icon: <CheckCircle className="h-4 w-4" />,
         color: "text-green-400",
-        icon: <CheckCircle className="h-4 w-4" />
       };
     }
     return {
-      status: "Unverified",
+      status: "Private",
+      icon: <Info className="h-4 w-4" />,
       color: "text-gray-400",
-      icon: <Info className="h-4 w-4" />
     };
+  };
+
+  const clearContractsStorage = () => {
+    localStorage.removeItem("contractsStorage");
+    setContracts([]);
+    setHasSimulationData(false);
   };
 
   if (isLoading) {
@@ -116,10 +121,24 @@ export default function ContractsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-white">Contracts</h1>
-        
-      
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white">Contracts</h1>
+          {hasSimulationData && (
+            <p className="text-gray-400 mt-2">
+              {contracts.length} contract{contracts.length !== 1 ? 's' : ''} stored from simulations
+            </p>
+          )}
+        </div>
+        {hasSimulationData && contracts.length > 0 && (
+          <Button 
+            onClick={clearContractsStorage}
+            variant="outline"
+            className="border-red-500 text-red-400 hover:bg-red-500 hover:text-white"
+          >
+            Clear All Contracts
+          </Button>
+        )}
       </div>
 
       

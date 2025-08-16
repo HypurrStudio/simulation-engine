@@ -131,8 +131,8 @@ export default function SimulatorPage() {
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+    e.preventDefault();
+    setIsLoading(true);
 
     try {
       console.log("Form Data:", formData)
@@ -158,26 +158,43 @@ export default function SimulatorPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(requestBody),
-      })
+      });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const responseData = await response.json()
-      
-      // Store the full response data for the view page
-      localStorage.setItem("simulationResponse", JSON.stringify(responseData))
-      
-      // Redirect to the view page
-      router.push("/dashboard/simulator/view")
+      const responseData = await response.json();
+      console.log("Simulation response:", responseData);
+
+      // Store the full simulation response
+      localStorage.setItem("simulationResponse", JSON.stringify(responseData));
+
+      // Store contracts separately, avoiding duplicates
+      if (responseData.contracts) {
+        const existingContracts = JSON.parse(localStorage.getItem("contractsStorage") || "{}");
+        const newContracts = { ...existingContracts };
+        
+        // Add new contracts, avoiding duplicates
+        Object.entries(responseData.contracts).forEach(([address, contractData]: [string, any]) => {
+          if (!existingContracts[address]) {
+            newContracts[address] = contractData;
+          }
+        });
+        
+        localStorage.setItem("contractsStorage", JSON.stringify(newContracts));
+        console.log("Updated contracts storage:", newContracts);
+      }
+
+      // Redirect to view page
+      router.push("/dashboard/simulator/view");
     } catch (error) {
-      console.error("Simulation failed:", error)
-      alert("Simulation failed. Please try again.")
+      console.error("Simulation failed:", error);
+      alert("Simulation failed. Please try again.");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const handleFunctionSelect = (functionName: string) => {
     if (contractABI) {
