@@ -5,12 +5,13 @@ import {
   ContractObject,
   TransactionObject,
   CallTrace,
-  StateDiff,
   StorageDiff,
   BalanceDiff,
   ContractObjectResponse,
+  Events,
+  TraceStateDiff,
 } from '../types/simulation';
-import { rpcService, RPCCallParam, AccessListResult } from './RPCService';
+import { rpcService, RPCCallParam, AccessListResult, RPCTraceParam } from './RPCService';
 import { SimulationError } from '../utils/errors';
 import logger from '../utils/logger';
 import config from '../config';
@@ -39,18 +40,30 @@ export class SimulationService {
 
       // Prepare simulation parameters
       const callParams = this.prepareCallParams(request);
-      const traceParams = this.prepareTraceParams(request);
+      const callTracerParams = this.prepareCallTracerParams(request);
 
       // Execute simulation
-      const traceResult = await rpcService.traceCall(
+      const callTraceResult = await rpcService.traceCall(
         callParams,
         request.blockNumber || 'latest',
-        traceParams
+        callTracerParams
       );
 
+      // Prepare prestate trace parameters
+      const prestateTracerParams = this.preparePrestateTracerParams(request);
+
+      // Execute simulation
+      const prestateTraceResult = await rpcService.traceCall(
+        callParams,
+        request.blockNumber || 'latest',
+        prestateTracerParams
+      );
+
+      const logs = this.parseEvents([callTraceResult] as unknown as CallTrace[]);
+
       // Process results
-      const callTrace = this.processTraceResult(traceResult);
-      const contractAddresses = this.collectContractAddresses(callTrace, request.to);
+      const callTrace = callTraceResult as unknown as CallTrace;
+      const contractAddresses = this.collectContractAddresses([callTrace], request.to);
 
       const [blockHeaderResult, accessList, contractsMetadataResult] = await Promise.allSettled([
         this.fetchBlockHeader(request.blockNumber || 'latest'),
@@ -61,18 +74,19 @@ export class SimulationService {
       const blockHeader = blockHeaderResult.status === "fulfilled" ? blockHeaderResult.value : null;
       const contractsMetadata = contractsMetadataResult.status === "fulfilled" ? contractsMetadataResult.value : [];
 
-      const {storageDiff, balanceDiff} = this.splitStateDiff(traceResult.stateDiff || {});
+      const {storageDiff, balanceDiff} = this.splitStateDiff(prestateTraceResult as unknown as TraceStateDiff);
 
       // Build response
       const response = this.buildSimulationResponse(
         request,
-        traceResult,
-        callTrace,
+        callTraceResult,
+        [callTrace],
         accessList.status === 'fulfilled' ? accessList.value : [],
         storageDiff,
         balanceDiff,
         blockHeader,
         contractsMetadata,
+        logs,
         simulationId
       );
 
@@ -133,60 +147,48 @@ export class SimulationService {
   }
 
   /**
-   * Prepare trace parameters for RPC
+   * Prepare call trace parameters for RPC
    */
-  private prepareTraceParams(request: SimulationRequest): string[] {
-    return ["trace", "stateDiff"];
+  private prepareCallTracerParams(request: SimulationRequest): RPCTraceParam {
+    return {
+      tracer: "callTracer",
+      tracerConfig: {
+        withLog: true
+      },
+      stateOverrides: request.stateObjects
+    }
   }
 
   /**
-   * Process trace result into call trace format
+   * Prepare state trace parameters for RPC
    */
-  private processTraceResult(traceResult: any): CallTrace[] {
-    if (!traceResult) return [];
-    const traces = traceResult.trace;
-
-    const lookup = new Map<string, CallTrace>();
-
-    // Pass 1: Create all nodes and store in map
-    for (const t of traces) {
-      const node: CallTrace = {
-        from: t.action.from,
-        to: t.action.to,
-        gas: t.action.gas,
-        gas_used: t.result?.gasUsed || "0x0",
-        input: t.action.input,
-        subtraces: t.subtraces,
-        traceAddress: t.traceAddress,
-        output: t.result?.output,
-        value: t.action.value,
-        error: t.error,
-        calls: []
-      };
-
-      const addrKey = t.traceAddress.join(".");
-      lookup.set(addrKey, node);
+  private preparePrestateTracerParams(request: SimulationRequest): RPCTraceParam {
+    return {
+      tracer: "prestateTracer",
+      tracerConfig: {
+        diffMode: true,
+        disableCode: true,
+        disableStorage: false
+      },
+      stateOverrides: request.stateObjects
     }
+  }
 
-    const root: CallTrace[] = [];
+  /**
+   * Parse events from callTrace
+   */
+  private parseEvents(callsTrace: CallTrace[]): Events[] {
+    const logs: Events[] = [];
 
-    // Pass 2: Link children to parents
-    for (const [addrKey, node] of lookup) {
-      if (node.traceAddress.length === 0) {
-        root.push(node); // top-level trace
-      } else {
-        const parentKey = node.traceAddress.slice(0, -1).join(".");
-        const parent = lookup.get(parentKey);
-        if (parent) {
-          parent.calls!.push(node);
-        } else {
-          // orphan — push to root if no parent found
-          root.push(node);
-        }
+    function recurse(calls: CallTrace[]) {
+      for (const call of calls) {
+        if (call.logs) logs.push(...call.logs);
+        if (call.calls) recurse(call.calls);
       }
     }
 
-    return root;
+    recurse(callsTrace);
+    return logs;
   }
 
   /**
@@ -285,6 +287,7 @@ export class SimulationService {
     balanceDiff: BalanceDiff,
     blockHeader: any,
     contractsMetadata: ContractObject[],
+    events: Events[],
     simulationId: string
   ): SimulationResponse {
     const gasUsed = parseInt(traceResult?.gasUsed || '0x0', 16);
@@ -296,37 +299,59 @@ export class SimulationService {
         callTrace,
         storageDiff,
         balanceDiff,
-        blockHeader
+        blockHeader,
+        events
       ),
       contracts: this.buildContractObject(request, traceResult, contractsMetadata),
       generated_access_list: accessList,
     };
   }
 
-  private splitStateDiff(stateDiff: StateDiff): any {
-      const storageDiff: StorageDiff = {};
-  const balanceDiff: BalanceDiff = {};
+  // Split State into storage and balance diff
+  private splitStateDiff(stateDiff: TraceStateDiff): {
+    storageDiff: StorageDiff;
+    balanceDiff: BalanceDiff;
+  } {
+    const storageDiff: StorageDiff = {};
+    const balanceDiff: BalanceDiff = {};
 
-  for (const [address, diff] of Object.entries(stateDiff)) {
-    // Check storage changes
-    const storageChanges: StorageDiff[string] = {};
-    for (const [slot, slotDiff] of Object.entries(diff.storage || {})) {
-      if (slotDiff !== "=" && "*" in slotDiff) {
-        storageChanges[slot] = slotDiff["*"];
+    const addresses = new Set([
+      ...Object.keys(stateDiff.pre),
+      ...Object.keys(stateDiff.post),
+    ]);
+
+    for (const address of addresses) {
+      const pre = stateDiff.pre[address] || {};
+      const post = stateDiff.post[address] || {};
+
+      // --- balance ---
+      const preBalance = pre.balance ?? "0x0";
+      const postBalance = post.balance ?? "0x0";
+      if (preBalance !== postBalance) {
+        balanceDiff[address] = { from: preBalance, to: postBalance };
+      }
+
+      // --- storage ---
+      const preStorage = pre.storage || {};
+      const postStorage = post.storage || {};
+      const slots = new Set([...Object.keys(preStorage), ...Object.keys(postStorage)]);
+      const storageChanges: StorageDiff[string] = {};
+
+      for (const slot of slots) {
+        const from = preStorage[slot] ?? "0x0000000000000000000000000000000000000000000000000000000000000000";
+        const to = postStorage[slot] ?? "0x0000000000000000000000000000000000000000000000000000000000000000";
+        if (from !== to) {
+          storageChanges[slot] = { from, to };
+        }
+      }
+
+      if (Object.keys(storageChanges).length > 0) {
+        storageDiff[address] = storageChanges;
       }
     }
-    if (Object.keys(storageChanges).length > 0) {
-      storageDiff[address] = storageChanges;
-    }
 
-    // Check balance changes
-    if (diff.balance !== "=" && "*" in diff.balance) {
-      balanceDiff[address] = diff.balance["*"];
-    }
+    return { storageDiff, balanceDiff };
   }
-
-  return { storageDiff, balanceDiff };
-}
 
   /**
    * Build transaction object
@@ -337,7 +362,8 @@ export class SimulationService {
     callTrace: CallTrace[],
     storageDiff: StorageDiff,
     balanceDiff: BalanceDiff,
-    blockHeader: any
+    blockHeader: any,
+    events: Events[]
   ): TransactionObject {
     return {
       from: request.from || '0x0',
@@ -349,7 +375,7 @@ export class SimulationService {
       output: traceResult?.output || '0x',
       timestamp: blockHeader.timestamp || '0',
       blockHeader: {
-        number: blockHeader.blockNumber || '0',
+        number: blockHeader.number || '0',
         hash: blockHeader.hash || '0x0',
         baseFeePerGas: blockHeader.baseFeePerGas || '0x0',
         blobGasUsed: blockHeader.blobGasUsed || '0x0',
@@ -368,6 +394,7 @@ export class SimulationService {
       callTrace: callTrace,
       balanceDiff: balanceDiff,
       storageDiff: storageDiff,
+      events: events
     };
   }
 
