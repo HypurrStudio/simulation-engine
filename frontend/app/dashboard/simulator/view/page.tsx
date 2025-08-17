@@ -93,7 +93,7 @@ export default function SimulatorViewPage() {
               gasUsed: trace.gas_used,
               error: trace.error || "",
               value: trace.value,
-              calls: trace.calls ? trace.calls.map(convertCallTrace) : undefined,
+              calls: trace.calls ? trace.calls?.map(convertCallTrace) : undefined,
             });
 
             const rawTrace = data.transaction?.callTrace

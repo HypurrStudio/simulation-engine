@@ -36,7 +36,7 @@ export default function ContractDetailsPage({
 
   const fetchBalance = async (address: string) => {
     try {
-      const provider = new ethers.JsonRpcProvider(process.env.NEXT_HYPEREVM_RPC_URL);
+      const provider = new ethers.JsonRpcProvider(process.env.NEXT_PUBLIC_HYPEREVM_RPC_URL);
       const balanceWei = await provider.getBalance(address);
       const balanceEth = ethers.formatEther(balanceWei);
       setBalance(parseFloat(balanceEth).toFixed(4));
