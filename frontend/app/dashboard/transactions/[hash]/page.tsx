@@ -81,7 +81,8 @@ export default function TransactionTracePage() {
             input: trace?.input || "0x",
             output: trace?.output || "0x",
             gas: trace?.gas,
-            gasUsed: trace?.gas_used,
+            type: trace?.type,
+            gasUsed: trace?.gasUsed,
             error: trace?.error || "",
             value: trace?.value,
             calls: Array.isArray(trace?.calls)

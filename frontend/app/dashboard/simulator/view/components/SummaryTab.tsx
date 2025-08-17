@@ -34,7 +34,7 @@ export default function SummaryTab({
     if (!gas) return "0";
     const n = Number(gas);
     if (Number.isNaN(n)) return gas;
-    return n.toLocaleString();
+    return n.toString();
   };
 
   const formatEth = (ethStr?: string) => {
@@ -213,6 +213,14 @@ export default function SummaryTab({
               </div>
             )}
 
+            {trace.type && (
+              <span
+                className={"text-indigo-400 text-xs py-0.5 my-3.5 break-all"}
+              >
+                type: {trace.type}
+              </span>
+            )}
+
             {/* Input parameters */}
             {hasValues(trace.inputDecoded) ? (
               <div className="text-green-300 text-xs break-words">
@@ -256,7 +264,7 @@ export default function SummaryTab({
 
         {/* Children */}
         {hasChildren && isExpanded && (
-          <div className="ml-6 space-y-2">
+          <div className="ml-6 space-y-4">
             {trace.children.map((child: any, index: number) => (
               <DecodedTraceTree
                 key={`${child.from}-${child.to}-${index}`}

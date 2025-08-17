@@ -11,13 +11,14 @@ export interface CallTraceItem {
   to: string
   error: string
   gas: string
-  gas_used: string
+  gasUsed: string
   input: string
   subtraces: number
   traceAddress: number[]
   output: string
   value: string
   calls: CallTraceItem[]
+  type: string
 }
 
 export interface DisplayTraceItem {
@@ -26,6 +27,7 @@ export interface DisplayTraceItem {
   to: string
   gas: string
   gasUsed: string
+  type: string
   input: string
   error: string
   output: string
@@ -70,7 +72,8 @@ export function parseCallTrace(
       from: item.from ?? "0x",
       to: item.to ?? "0x",
       gas: item.gas,
-      gasUsed: item.gas_used,
+      type: item.type,
+      gasUsed: item.gasUsed,
       error: item.error,
       input: item.input,
       output: item.output,

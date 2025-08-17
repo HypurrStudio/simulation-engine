@@ -16,6 +16,7 @@ export type RawCall = {
   input: string; // 0x...
   output?: string; // 0x...
   error?: string;
+  type?: string;
   gas?: string | number; // hex or decimal
   gasUsed?: string | number; // hex or decimal
   value?: string | number; // hex or decimal
@@ -33,6 +34,7 @@ export type DecodedNode = {
   functionSelector?: string; // 0xXXXXXXXX
   functionName?: string; // e.g., transfer
   signature?: string; // e.g., transfer(address,uint256)
+  type?: string;
 
   // decoded I/O
   inputRaw?: string;
@@ -130,6 +132,7 @@ export class TraceDecoderManual {
       gas: toDecString(node.gas),
       gasUsed: toDecString(node.gasUsed),
       value: toDecString(node.value),
+      type: node.type,
       error: node.error,
       inputRaw: node.input,
       outputRaw: node.output,
@@ -207,7 +210,7 @@ export function decodeWholeExport(data: any): any {
     input: trace.input || "0x",
     output: trace.output || "0x",
     gas: trace.gas,
-    gasUsed: trace.gas_used,
+    gasUsed: trace.gasUsed,
     error: trace.error,
     value: trace.value,
     calls: trace.calls ? trace.calls.map(convertCallTrace) : undefined
