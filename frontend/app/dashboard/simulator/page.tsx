@@ -233,7 +233,7 @@ export default function SimulatorPage() {
       };
 
       const response = await fetch(
-        "https://hypurrstudio.onrender.com/api/simulate",
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/simulate`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

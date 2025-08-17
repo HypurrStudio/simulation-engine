@@ -9,10 +9,8 @@ import BalanceStateTab from "@/app/dashboard/simulator/view/components/BalanceSt
 import GasProfileTab from "@/app/dashboard/simulator/view/components/GasProfileTab";
 import StorageStateTab from "@/app/dashboard/simulator/view/components/StorageStateTab";
 import TransactionDetails from "@/app/dashboard/simulator/view/components/TransactionDetails";
+import EventsTab from "../../simulator/view/components/EventsTab";
 
-// Optional: if you rely on helpers elsewhere, keep these imports;
-// otherwise you can remove them.
-// import { DisplayTraceItem, parseCallTrace } from "@/lib/utils";
 
 export default function TransactionTracePage() {
   const router = useRouter();
@@ -23,16 +21,18 @@ export default function TransactionTracePage() {
   const [decodedTraceTree, setDecodedTraceTree] = useState<any>(null);
 
   const [activeTab, setActiveTab] = useState("summary");
-  const [expandedStorageSections, setExpandedStorageSections] =
-    useState<Set<string>>(new Set());
+  const [expandedStorageSections, setExpandedStorageSections] = useState<
+    Set<string>
+  >(new Set());
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Build API URL (configure base via NEXT_PUBLIC_TRACE_API_BASE when not localhost)
-  const apiBase =
-    process.env.NEXT_PUBLIC_TRACE_API_BASE || "https://hypurrstudio.onrender.com/";
-  const url = `https://hypurrstudio.onrender.com/api/trace/tx?txHash=${encodeURIComponent(txHash)}`;
+  
+  const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/trace/tx?txHash=${encodeURIComponent(
+    txHash
+  )}`;
 
   useEffect(() => {
     if (!txHash) return;
@@ -51,11 +51,11 @@ export default function TransactionTracePage() {
         console.log("API response:", data);
         setResponseData(data);
 
-        
-
         // Decode trace using your manual decoder (proxy-aware)
         try {
-          const { TraceDecoderManual } = await import("@/utils/decodeCallTrace");
+          const { TraceDecoderManual } = await import(
+            "@/utils/decodeCallTrace"
+          );
 
           const contracts: Record<string, any> = {};
           if (data.contracts) {
@@ -65,7 +65,8 @@ export default function TransactionTracePage() {
                   address: addr,
                   ABI: contract.ABI,
                   Implementation: contract.Implementation,
-                  Proxy: contract.Proxy || (contract.Implementation ? "1" : "0"),
+                  Proxy:
+                    contract.Proxy || (contract.Implementation ? "1" : "0"),
                 };
               }
             );
@@ -120,6 +121,7 @@ export default function TransactionTracePage() {
     { id: "contracts", label: "Contracts" },
     { id: "balance", label: "Balance state" },
     { id: "storage", label: "Storage state" },
+    { id: "events", label: "Events" },
     { id: "gas-profiler", label: "Gas Profiler" },
   ];
 
@@ -207,11 +209,10 @@ export default function TransactionTracePage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <h1 className="text-2xl font-bold text-white">Transaction Trace</h1>
-         
         </div>
 
         <div className="flex items-center space-x-3">
-        <span className="text-xs text-gray-400 break-all">
+          <span className="text-xs text-gray-400 break-all">
             Tx Hash: {txHash}
           </span>
         </div>
@@ -271,7 +272,9 @@ export default function TransactionTracePage() {
             ) : activeTab === "contracts" ? (
               <ContractsTab responseData={responseData} />
             ) : activeTab === "gas-profiler" ? (
-              <GasProfileTab responseData={responseData} />
+                <GasProfileTab responseData={responseData} />
+            ) : activeTab === "events" ? (
+              <EventsTab responseData={responseData} />
             ) : (
               <p className="text-gray-400 text-center">
                 Content for {tabs.find((t) => t.id === activeTab)?.label} tab
