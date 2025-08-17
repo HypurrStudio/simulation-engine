@@ -1,19 +1,30 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Switch } from "@/components/ui/switch"
-import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
-import { useRouter } from "next/navigation"
-import { fetchContractABI, ContractABI, EtherscanFunction, getFunctionDisplayName, encodeFunctionCall } from "@/lib/etherscan"
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChevronDown, ChevronUp, Loader2, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  fetchContractABI,
+  ContractABI,
+  EtherscanFunction,
+  getFunctionDisplayName,
+  encodeFunctionCall,
+} from "@/lib/etherscan";
 
 export default function SimulatorPage() {
-  const router = useRouter()
+  const router = useRouter();
   const [formData, setFormData] = useState({
     from: "",
     to: "",
@@ -21,183 +32,264 @@ export default function SimulatorPage() {
     value: "",
     gas: "",
     gasPrice: "",
-    blockNumber: ""
-  })
-  const [isLoading, setIsLoading] = useState(false)
-  const [inputType, setInputType] = useState<"function" | "raw">("function")
-  const [usePendingBlock, setUsePendingBlock] = useState(true)
-  const [overrideBlockNumber, setOverrideBlockNumber] = useState(false)
-  const [transactionParamsExpanded, setTransactionParamsExpanded] = useState(true)
-  const [blockHeaderExpanded, setBlockHeaderExpanded] = useState(true)
+    blockNumber: "",
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [inputType, setInputType] = useState<"function" | "raw">("function");
+  const [usePendingBlock, setUsePendingBlock] = useState(true);
+  const [overrideBlockNumber, setOverrideBlockNumber] = useState(false);
+  const [transactionParamsExpanded, setTransactionParamsExpanded] =
+    useState(true);
+  const [blockHeaderExpanded, setBlockHeaderExpanded] = useState(true);
 
-  // New state for Etherscan integration
-  const [contractABI, setContractABI] = useState<ContractABI | null>(null)
-  const [isLoadingABI, setIsLoadingABI] = useState(false)
-  const [selectedFunction, setSelectedFunction] = useState<EtherscanFunction | null>(null)
-  const [functionParameters, setFunctionParameters] = useState<Array<{ name: string; type: string; value: string }>>([])
+  // Etherscan ABI
+  const [contractABI, setContractABI] = useState<ContractABI | null>(null);
+  const [isLoadingABI, setIsLoadingABI] = useState(false);
+  const [selectedFunction, setSelectedFunction] =
+    useState<EtherscanFunction | null>(null);
+  const [functionParameters, setFunctionParameters] = useState<
+    Array<{ name: string; type: string; value: string }>
+  >([]);
 
-  // Fetch ABI when contract address changes
-  useEffect(() => {
-    const fetchABI = async () => {
-      if (!formData.to.trim()) {
-        setContractABI(null)
-        setSelectedFunction(null)
-        setFunctionParameters([])
-        return
+  // Hype Balance State
+  const [hypeBalanceExpanded, setHypeBalanceExpanded] = useState(false);
+  const [hypeBalanceOverrides, setHypeBalanceOverrides] = useState<
+    Array<{ key: string; value: string }>
+  >([]);
+
+  // State Override (per-contract storage overrides)
+  const [stateOverrideContracts, setStateOverrideContracts] = useState<
+    Array<{
+      address: string;
+      balanceOverrides: Array<{ key: string; value: string }>; // not used in UI; kept for type compat
+      storageOverrides: Array<{ key: string; value: string }>;
+    }>
+  >([]);
+
+  // ---------------- Helpers ----------------
+  const ensure0x = (v: string) => {
+    if (!v) return "0x0";
+    const s = v.trim();
+    return s.startsWith("0x") || s.startsWith("0X") ? s : "0x" + s;
+  };
+
+  const normalizeAddr = (a: string) => (a || "").trim();
+
+  const toHex = (value: string, isDecimal: boolean = false): string => {
+    if (!value) return "0x0";
+    if (value.startsWith("0x") || value.startsWith("0X")) return value;
+    if (isDecimal) {
+      const num = parseFloat(value);
+      if (isNaN(num)) return "0x0";
+      return (
+        "0x" +
+        Math.floor(num * Math.pow(10, 18))
+          .toString(16)
+          .toUpperCase()
+      );
+    } else {
+      try {
+        if (value.length > 15) {
+          const big = BigInt(value);
+          return "0x" + big.toString(16).toUpperCase();
+        } else {
+          const n = parseInt(value, 10);
+          if (isNaN(n)) return "0x0";
+          return "0x" + n.toString(16).toUpperCase();
+        }
+      } catch {
+        return "0x0";
+      }
+    }
+  };
+
+  // Build stateObjects from UI sections
+  const buildStateObjects = () => {
+    const stateObjects: Record<
+      string,
+      { balance?: string; stateDiff?: Record<string, string> }
+    > = {};
+
+    // 1) Hype Balance State (per-address balances)
+    for (const { key, value } of hypeBalanceOverrides) {
+      const addr = normalizeAddr(key);
+      const bal = value?.trim();
+      if (!addr || !bal) continue;
+      if (!stateObjects[addr]) stateObjects[addr] = {};
+      // balances may be typed in as hex or decimal wei; respect hex if provided
+      stateObjects[addr].balance =
+        bal.startsWith("0x") || bal.startsWith("0X") ? bal : toHex(bal, false);
+    }
+
+    // 2) State Override per-contract (storage stateDiff)
+    for (const c of stateOverrideContracts) {
+      const addr = normalizeAddr(c.address);
+      if (!addr) continue;
+
+      // Gather storage overrides (key/value must be hex; ensure 0x prefix)
+      const diff: Record<string, string> = {};
+      for (const { key, value } of c.storageOverrides || []) {
+        const k = key?.trim();
+        const v = value?.trim();
+        if (!k || !v) continue;
+        diff[ensure0x(k)] = ensure0x(v);
       }
 
-      setIsLoadingABI(true)
-      try {
-        const abi = await fetchContractABI(formData.to)
-        setContractABI(abi)
-        setSelectedFunction(null)
-        setFunctionParameters([])
-      } catch (error) {
-        console.error('Error fetching ABI:', error)
-        setContractABI(null)
-      } finally {
-        setIsLoadingABI(false)
+      // Only attach stateDiff if we have at least one pair
+      if (Object.keys(diff).length > 0) {
+        if (!stateObjects[addr]) stateObjects[addr] = {};
+        // merge with any existing stateDiff (e.g., if user added another block for same addr)
+        stateObjects[addr].stateDiff = {
+          ...(stateObjects[addr].stateDiff || {}),
+          ...diff,
+        };
       }
     }
 
-    // Debounce the API call
-    const timeoutId = setTimeout(fetchABI, 1000)
-    return () => clearTimeout(timeoutId)
-  }, [formData.to])
+    // Remove any empty objects (no balance & no stateDiff)
+    for (const [addr, obj] of Object.entries(stateObjects)) {
+      if (
+        !obj.balance &&
+        (!obj.stateDiff || Object.keys(obj.stateDiff).length === 0)
+      ) {
+        delete stateObjects[addr];
+      }
+    }
 
-  // Update function parameters when function is selected
+    return stateObjects;
+  };
+
+  // ---------------- Effects ----------------
+  useEffect(() => {
+    const fetchABI = async () => {
+      if (!formData.to.trim()) {
+        setContractABI(null);
+        setSelectedFunction(null);
+        setFunctionParameters([]);
+        return;
+      }
+      setIsLoadingABI(true);
+      try {
+        const abi = await fetchContractABI(formData.to);
+        setContractABI(abi);
+        setSelectedFunction(null);
+        setFunctionParameters([]);
+      } catch (error) {
+        console.error("Error fetching ABI:", error);
+        setContractABI(null);
+      } finally {
+        setIsLoadingABI(false);
+      }
+    };
+    const timeoutId = setTimeout(fetchABI, 1000);
+    return () => clearTimeout(timeoutId);
+  }, [formData.to]);
+
   useEffect(() => {
     if (selectedFunction) {
       const params = selectedFunction.inputs.map((input, index) => ({
         name: input.name || `param${index}`,
         type: input.type,
-        value: ""
-      }))
-      setFunctionParameters(params)
+        value: "",
+      }));
+      setFunctionParameters(params);
     } else {
-      setFunctionParameters([])
+      setFunctionParameters([]);
     }
-  }, [selectedFunction])
+  }, [selectedFunction]);
 
-  // Update form input when function parameters change
   useEffect(() => {
-    if (selectedFunction && functionParameters.length > 0 && contractABI) {
-      // Use proper function encoding
-      const encodedInput = encodeFunctionCall(selectedFunction.name, functionParameters, contractABI);
-      setFormData(prev => ({ ...prev, input: encodedInput }));
-    } else if (selectedFunction && functionParameters.length === 0 && contractABI) {
-      // Function with no parameters
-      const encodedInput = encodeFunctionCall(selectedFunction.name, [], contractABI);
-      setFormData(prev => ({ ...prev, input: encodedInput }));
+    if (selectedFunction && contractABI) {
+      const encodedInput = encodeFunctionCall(
+        selectedFunction.name,
+        functionParameters,
+        contractABI
+      );
+      setFormData((prev) => ({ ...prev, input: encodedInput }));
     }
   }, [selectedFunction, functionParameters, contractABI]);
 
-  const convertToHex = (value: string, isDecimal: boolean = false): string => {
-    if (!value) return "0x0"
-    
-    console.log("convertToHex input:", value, "type:", typeof value, "isDecimal:", isDecimal)
-    
-    if (isDecimal) {
-      // Convert decimal HYPE value to hex (multiply by 10^18)
-      const num = parseFloat(value)
-      if (isNaN(num)) return "0x0"
-      const result = "0x" + Math.floor(num * Math.pow(10, 18)).toString(16).toUpperCase()
-      console.log("HYPE conversion:", num, "->", result)
-      return result
-    } else {
-      // Convert raw decimal number directly to hex (no multiplication)
-      // Use BigInt for large numbers to avoid precision issues
-      let num: number | bigint
-      try {
-        if (value.length > 15) {
-          // For very large numbers, use BigInt
-          num = BigInt(value)
-          const result = "0x" + num.toString(16).toUpperCase()
-          console.log("BigInt conversion:", num.toString(), "->", result)
-          return result
-        } else {
-          // For smaller numbers, use parseInt
-          num = parseInt(value)
-          if (isNaN(num)) return "0x0"
-          const result = "0x" + num.toString(16).toUpperCase()
-          console.log("Int conversion:", num, "->", result)
-          return result
-        }
-      } catch (error) {
-        console.error("Conversion error:", error)
-        return "0x0"
-      }
-    }
-  }
-
+  // ---------------- Submit ----------------
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+    e.preventDefault();
+    setIsLoading(true);
 
     try {
-      console.log("Form Data:", formData)
-      console.log("Value before conversion:", formData.value)
-      console.log("Value after conversion:", convertToHex(formData.value, false))
-      
+      const stateObjects = buildStateObjects();
+
       const requestBody = {
         from: formData.from,
         to: formData.to,
         input: formData.input,
-        value: convertToHex(formData.value, false), // Convert raw value directly to hex (no HYPE conversion)
-        gas: convertToHex(formData.gas, false),
-        gasPrice: convertToHex(formData.gasPrice, false),
+        value: toHex(formData.value, false), // raw wei -> hex
+        gas: toHex(formData.gas, false),
+        gasPrice: toHex(formData.gasPrice, false),
         generateAccessList: true,
-        blockNumber: formData.blockNumber ? convertToHex(formData.blockNumber, false) : "latest"
+        blockNumber: formData.blockNumber
+          ? toHex(formData.blockNumber, false)
+          : "latest",
+        // NEW: include stateObjects exactly as required
+        stateObjects,
+      };
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/simulate`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+        }
+      );
+
+      if (!response.ok)
+        throw new Error(`HTTP error! status: ${response.status}`);
+      const responseData = await response.json();
+
+      // persist
+      localStorage.setItem("simulationResponse", JSON.stringify(responseData));
+      if (responseData.contracts) {
+        const existingContracts = JSON.parse(
+          localStorage.getItem("contractsStorage") || "{}"
+        );
+        const newContracts = { ...existingContracts };
+        Object.entries(responseData.contracts).forEach(
+          ([address, contractData]: [string, any]) => {
+            if (!existingContracts[address])
+              newContracts[address] = contractData;
+          }
+        );
+        localStorage.setItem("contractsStorage", JSON.stringify(newContracts));
       }
 
-      console.log("Request Body:", requestBody)
-
-      const response = await fetch("https://hypurrstudio.onrender.com/api/simulate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
-      const responseData = await response.json()
-      
-      // Store the full response data for the view page
-      localStorage.setItem("simulationResponse", JSON.stringify(responseData))
-      
-      // Redirect to the view page
-      router.push("/dashboard/simulator/view")
+      router.push("/dashboard/simulator/view");
     } catch (error) {
-      console.error("Simulation failed:", error)
-      alert("Simulation failed. Please try again.")
+      console.error("Simulation failed:", error);
+      alert("Simulation failed. Please try again.");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
+  // ---------------- UI Events ----------------
   const handleFunctionSelect = (functionName: string) => {
     if (contractABI) {
-      const func = contractABI.functions.find(f => f.name === functionName)
-      setSelectedFunction(func || null)
+      const func = contractABI.functions.find((f) => f.name === functionName);
+      setSelectedFunction(func || null);
     }
-  }
+  };
 
   const handleParameterChange = (index: number, value: string) => {
-    const updatedParams = [...functionParameters]
-    updatedParams[index].value = value
-    setFunctionParameters(updatedParams)
-  }
+    const updatedParams = [...functionParameters];
+    updatedParams[index].value = value;
+    setFunctionParameters(updatedParams);
+  };
 
-  // Check if left side is complete
-  const isLeftSideComplete = formData.to.trim() !== "" && (
-    (inputType === "function" && selectedFunction) ||
-    (inputType === "raw" && formData.input.trim() !== "")
-  )
+  const isLeftSideComplete =
+    formData.to.trim() !== "" &&
+    ((inputType === "function" && selectedFunction) ||
+      (inputType === "raw" && formData.input.trim() !== ""));
 
+  // ---------------- Render ----------------
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
       <div className="mb-8">
@@ -208,22 +300,44 @@ export default function SimulatorPage() {
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
           {/* Left Column - Contract */}
           <div className="space-y-6">
-            <Card className="border" style={{ backgroundColor: 'rgba(30, 30, 30, 0.6)', borderColor: 'var(--border)', backdropFilter: 'blur(10px)' }}>
+            <Card
+              className="border"
+              style={{
+                backgroundColor: "rgba(30, 30, 30, 0.6)",
+                borderColor: "var(--border)",
+                backdropFilter: "blur(10px)",
+              }}
+            >
               <CardHeader>
-                <CardTitle className="text-primary" style={{ color: 'var(--text-primary)' }}>Contract</CardTitle>
+                <CardTitle
+                  className="text-primary"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  Contract
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label className="text-secondary mb-2 block" style={{ color: 'var(--text-secondary)' }}>
+                  <Label
+                    className="text-secondary mb-2 block"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
                     Contract Address
                   </Label>
                   <div className="relative">
                     <Input
                       placeholder="0x..."
                       value={formData.to}
-                      onChange={(e) => setFormData({ ...formData, to: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, to: e.target.value })
+                      }
                       className="border"
-                      style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}
+                      style={{
+                        backgroundColor: "var(--bg-primary)",
+                        borderColor: "var(--border)",
+                        color: "var(--text-primary)",
+                        opacity: 0.8,
+                      }}
                       required
                     />
                     {isLoadingABI && (
@@ -233,76 +347,133 @@ export default function SimulatorPage() {
                     )}
                   </div>
                   {contractABI && (
-                    <p className="text-xs text-green-400 mt-1">✓ Contract verified on Etherscan</p>
+                    <p className="text-xs text-green-400 mt-1">
+                      ✓ Contract verified on Etherscan
+                    </p>
                   )}
                   {formData.to.trim() && !isLoadingABI && !contractABI && (
-                    <p className="text-xs text-yellow-400 mt-1">⚠ Contract not verified or not found</p>
+                    <p className="text-xs text-yellow-400 mt-1">
+                      ⚠ Contract not verified or not found
+                    </p>
                   )}
                 </div>
 
                 <div>
-                  <Label className="text-secondary mb-2 block" style={{ color: 'var(--text-secondary)' }}>
+                  <Label
+                    className="text-secondary mb-2 block"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
                     Network
                   </Label>
                   <Select>
-                    <SelectTrigger className="border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}>
+                    <SelectTrigger
+                      className="border"
+                      style={{
+                        backgroundColor: "var(--bg-primary)",
+                        borderColor: "var(--border)",
+                        color: "var(--text-primary)",
+                        opacity: 0.8,
+                      }}
+                    >
                       <SelectValue placeholder="HyperEVM Mainnet" />
                     </SelectTrigger>
-                    <SelectContent className="border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
-                      <SelectItem value="HyperEVM_Mainnet">HyperEVM Mainnet</SelectItem>
+                    <SelectContent
+                      className="border"
+                      style={{
+                        backgroundColor: "var(--bg-primary)",
+                        borderColor: "var(--border)",
+                        color: "var(--text-primary)",
+                      }}
+                    >
+                      <SelectItem value="HyperEVM_Mainnet">
+                        HyperEVM Mainnet
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                {/* Function Selection - Only show when address is filled */}
+                {/* Function / Raw */}
                 {formData.to.trim() !== "" && (
                   <div className="space-y-4 pt-4">
                     <div className="flex items-center space-x-4">
                       <div className="flex items-center space-x-2">
-                        <input 
-                          type="radio" 
-                          id="function" 
-                          name="inputType" 
+                        <input
+                          type="radio"
+                          id="function"
+                          name="inputType"
                           checked={inputType === "function"}
                           onChange={() => setInputType("function")}
-                          style={{ accentColor: 'var(--color-primary)' }} 
+                          style={{ accentColor: "var(--color-primary)" }}
                         />
-                        <Label htmlFor="function" className="text-secondary" style={{ color: 'var(--text-secondary)' }}>
+                        <Label
+                          htmlFor="function"
+                          className="text-secondary"
+                          style={{ color: "var(--text-secondary)" }}
+                        >
                           Choose function and parameters
                         </Label>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <input 
-                          type="radio" 
-                          id="raw" 
-                          name="inputType" 
+                        <input
+                          type="radio"
+                          id="raw"
+                          name="inputType"
                           checked={inputType === "raw"}
                           onChange={() => setInputType("raw")}
-                          style={{ accentColor: 'var(--color-primary)' }} 
+                          style={{ accentColor: "var(--color-primary)" }}
                         />
-                        <Label htmlFor="raw" className="text-secondary" style={{ color: 'var(--text-secondary)' }}>
+                        <Label
+                          htmlFor="raw"
+                          className="text-secondary"
+                          style={{ color: "var(--text-secondary)" }}
+                        >
                           Enter raw input data
                         </Label>
                       </div>
                     </div>
-                    
-                    {/* Function Selection Option */}
+
                     {inputType === "function" && (
                       <div>
-                        <Label className="text-secondary mb-2 block" style={{ color: 'var(--text-secondary)' }}>
+                        <Label
+                          className="text-secondary mb-2 block"
+                          style={{ color: "var(--text-secondary)" }}
+                        >
                           Select function
                         </Label>
                         {isLoadingABI ? (
-                          <div className="flex items-center space-x-2 p-3 border rounded" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)' }}>
+                          <div
+                            className="flex items-center space-x-2 p-3 border rounded"
+                            style={{
+                              backgroundColor: "var(--bg-primary)",
+                              borderColor: "var(--border)",
+                            }}
+                          >
                             <Loader2 className="h-4 w-4 animate-spin" />
-                            <span className="text-sm text-gray-400">Loading functions...</span>
+                            <span className="text-sm text-gray-400">
+                              Loading functions...
+                            </span>
                           </div>
                         ) : contractABI ? (
                           <Select onValueChange={handleFunctionSelect}>
-                            <SelectTrigger className="border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}>
+                            <SelectTrigger
+                              className="border"
+                              style={{
+                                backgroundColor: "var(--bg-primary)",
+                                borderColor: "var(--border)",
+                                color: "var(--text-primary)",
+                                opacity: 0.8,
+                              }}
+                            >
                               <SelectValue placeholder="Select a function" />
                             </SelectTrigger>
-                            <SelectContent className="border" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)' }}>
+                            <SelectContent
+                              className="border"
+                              style={{
+                                backgroundColor: "var(--bg-primary)",
+                                borderColor: "var(--border)",
+                                color: "var(--text-primary)",
+                              }}
+                            >
                               {contractABI.functions.map((func, index) => (
                                 <SelectItem key={index} value={func.name}>
                                   {getFunctionDisplayName(func)}
@@ -311,15 +482,23 @@ export default function SimulatorPage() {
                             </SelectContent>
                           </Select>
                         ) : (
-                          <div className="p-3 border rounded text-sm text-gray-400" style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)' }}>
+                          <div
+                            className="p-3 border rounded text-sm text-gray-400"
+                            style={{
+                              backgroundColor: "var(--bg-primary)",
+                              borderColor: "var(--border)",
+                            }}
+                          >
                             Enter a verified contract address to load functions
                           </div>
                         )}
 
-                        {/* Function Parameters - Only show when function is selected */}
                         {selectedFunction && functionParameters.length > 0 && (
                           <div className="mt-4">
-                            <Label className="text-secondary mb-2 block" style={{ color: 'var(--text-secondary)' }}>
+                            <Label
+                              className="text-secondary mb-2 block"
+                              style={{ color: "var(--text-secondary)" }}
+                            >
                               Function Parameters
                             </Label>
                             <div className="space-y-2">
@@ -328,12 +507,22 @@ export default function SimulatorPage() {
                                   <Label className="text-xs text-gray-400 block mb-1">
                                     {param.name} ({param.type})
                                   </Label>
-                                  <Input 
+                                  <Input
                                     placeholder={`Enter ${param.name}`}
                                     value={param.value}
-                                    onChange={(e) => handleParameterChange(index, e.target.value)}
+                                    onChange={(e) =>
+                                      handleParameterChange(
+                                        index,
+                                        e.target.value
+                                      )
+                                    }
                                     className="border text-sm"
-                                    style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}
+                                    style={{
+                                      backgroundColor: "var(--bg-primary)",
+                                      borderColor: "var(--border)",
+                                      color: "var(--text-primary)",
+                                      opacity: 0.8,
+                                    }}
                                   />
                                 </div>
                               ))}
@@ -343,18 +532,28 @@ export default function SimulatorPage() {
                       </div>
                     )}
 
-                    {/* Raw Input Data Option */}
                     {inputType === "raw" && (
                       <div>
-                        <Label className="text-secondary mb-2 block" style={{ color: 'var(--text-secondary)' }}>
+                        <Label
+                          className="text-secondary mb-2 block"
+                          style={{ color: "var(--text-secondary)" }}
+                        >
                           Raw input data
                         </Label>
-                        <Textarea 
+                        <Textarea
                           placeholder="Enter raw input data (hex format)"
                           value={formData.input}
-                          onChange={(e) => setFormData({ ...formData, input: e.target.value })}
+                          onChange={(e) =>
+                            setFormData({ ...formData, input: e.target.value })
+                          }
                           className="border"
-                          style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8, minHeight: '100px' }}
+                          style={{
+                            backgroundColor: "var(--bg-primary)",
+                            borderColor: "var(--border)",
+                            color: "var(--text-primary)",
+                            opacity: 0.8,
+                            minHeight: "100px",
+                          }}
                           required
                         />
                       </div>
@@ -364,23 +563,36 @@ export default function SimulatorPage() {
               </CardContent>
             </Card>
           </div>
-          
-          {/* Right Column - Transaction Parameters */}
+
+          {/* Right Column */}
           <div className="space-y-6">
-            <Card className="border" style={{ 
-              backgroundColor: 'rgba(30, 30, 30, 0.6)', 
-              borderColor: 'var(--border)', 
-              backdropFilter: 'blur(10px)',
-              opacity: isLeftSideComplete ? 1 : 0.5,
-              pointerEvents: isLeftSideComplete ? 'auto' : 'none'
-            }}>
+            <Card
+              className="border"
+              style={{
+                backgroundColor: "rgba(30, 30, 30, 0.6)",
+                borderColor: "var(--border)",
+                backdropFilter: "blur(10px)",
+                opacity: isLeftSideComplete ? 1 : 0.5,
+                pointerEvents: isLeftSideComplete ? "auto" : "none",
+              }}
+            >
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="text-primary" style={{ color: 'var(--text-primary)' }}>Transaction Parameters</CardTitle>
+                <CardTitle
+                  className="text-primary"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  Transaction Parameters
+                </CardTitle>
                 <Button
+                  type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => setTransactionParamsExpanded(!transactionParamsExpanded)}
-                  style={{ color: 'var(--text-secondary)' }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setTransactionParamsExpanded(!transactionParamsExpanded);
+                  }}
+                  style={{ color: "var(--text-secondary)" }}
                   disabled={!isLeftSideComplete}
                 >
                   {transactionParamsExpanded ? <ChevronUp /> : <ChevronDown />}
@@ -388,85 +600,475 @@ export default function SimulatorPage() {
               </CardHeader>
               {transactionParamsExpanded && (
                 <CardContent className="space-y-4">
-                 
-                  
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label className="text-secondary" style={{ color: 'var(--text-secondary)' }}>Block Number</Label>
+                      <Label
+                        className="text-secondary"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
+                        Block Number
+                      </Label>
                       <Input
                         placeholder="/"
                         value={formData.blockNumber}
-                        onChange={(e) => setFormData({ ...formData, blockNumber: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            blockNumber: e.target.value,
+                          })
+                        }
                         className="border"
                         disabled={!isLeftSideComplete}
-                        style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}
+                        style={{
+                          backgroundColor: "var(--bg-primary)",
+                          borderColor: "var(--border)",
+                          color: "var(--text-primary)",
+                          opacity: 0.8,
+                        }}
                       />
                     </div>
                   </div>
-                  
+
                   <div>
-                    <Label className="text-secondary" style={{ color: 'var(--text-secondary)' }}>From</Label>
+                    <Label
+                      className="text-secondary"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      From
+                    </Label>
                     <Input
                       placeholder="0x..."
                       value={formData.from}
-                      onChange={(e) => setFormData({ ...formData, from: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, from: e.target.value })
+                      }
                       className="border"
                       disabled={!isLeftSideComplete}
-                      style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}
+                      style={{
+                        backgroundColor: "var(--bg-primary)",
+                        borderColor: "var(--border)",
+                        color: "var(--text-primary)",
+                        opacity: 0.8,
+                      }}
                       required
                     />
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label className="text-secondary" style={{ color: 'var(--text-secondary)' }}>Gas</Label>
-                      <Input 
+                      <Label
+                        className="text-secondary"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
+                        Gas
+                      </Label>
+                      <Input
                         defaultValue="8000000"
                         value={formData.gas}
-                        onChange={(e) => setFormData({ ...formData, gas: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({ ...formData, gas: e.target.value })
+                        }
                         className="border"
                         disabled={!isLeftSideComplete}
-                        style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}
+                        style={{
+                          backgroundColor: "var(--bg-primary)",
+                          borderColor: "var(--border)",
+                          color: "var(--text-primary)",
+                          opacity: 0.8,
+                        }}
                         required
                       />
                     </div>
                     <div>
-                      <Label className="text-secondary" style={{ color: 'var(--text-secondary)' }}>Gas Price</Label>
-                      <Input 
+                      <Label
+                        className="text-secondary"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
+                        Gas Price
+                      </Label>
+                      <Input
                         defaultValue="0"
                         value={formData.gasPrice}
-                        onChange={(e) => setFormData({ ...formData, gasPrice: e.target.value })}
+                        onChange={(e) =>
+                          setFormData({ ...formData, gasPrice: e.target.value })
+                        }
                         className="border"
                         disabled={!isLeftSideComplete}
-                        style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}
+                        style={{
+                          backgroundColor: "var(--bg-primary)",
+                          borderColor: "var(--border)",
+                          color: "var(--text-primary)",
+                          opacity: 0.8,
+                        }}
                         required
                       />
                     </div>
                   </div>
-                  
+
                   <div>
-                    <Label className="text-secondary" style={{ color: 'var(--text-secondary)' }}>Value</Label>
+                    <Label
+                      className="text-secondary"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      Value
+                    </Label>
                     <Input
                       placeholder="Enter raw value (e.g., 41355259822160)"
                       value={formData.value}
-                      onChange={(e) => setFormData({ ...formData, value: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, value: e.target.value })
+                      }
                       className="border"
                       disabled={!isLeftSideComplete}
-                      style={{ backgroundColor: 'var(--bg-primary)', borderColor: 'var(--border)', color: 'var(--text-primary)', opacity: 0.8 }}
+                      style={{
+                        backgroundColor: "var(--bg-primary)",
+                        borderColor: "var(--border)",
+                        color: "var(--text-primary)",
+                        opacity: 0.8,
+                      }}
                       required
                     />
                   </div>
                 </CardContent>
               )}
             </Card>
-            
-            <Button 
+
+            {/* Hype Balance State */}
+            <Card
+              className="border"
+              style={{
+                backgroundColor: "rgba(30, 30, 30, 0.6)",
+                borderColor: "var(--border)",
+                backdropFilter: "blur(10px)",
+                opacity: isLeftSideComplete ? 1 : 0.5,
+                pointerEvents: isLeftSideComplete ? "auto" : "none",
+              }}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle
+                  className="text-primary"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  Hype Balance State
+                </CardTitle>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setHypeBalanceExpanded(!hypeBalanceExpanded);
+                  }}
+                  className="h-8 w-8 p-0"
+                  style={{ color: "var(--text-secondary)" }}
+                  disabled={!isLeftSideComplete}
+                >
+                  {hypeBalanceExpanded ? <ChevronUp /> : <ChevronDown />}
+                </Button>
+              </CardHeader>
+              {hypeBalanceExpanded && (
+                <CardContent className="space-y-4">
+                  {hypeBalanceOverrides.map((override, index) => (
+                    <div key={index} className="flex items-center space-x-2">
+                      <Input
+                        placeholder="Address (0x...)"
+                        value={override.key}
+                        onChange={(e) => {
+                          const newOverrides = [...hypeBalanceOverrides];
+                          newOverrides[index].key = e.target.value;
+                          setHypeBalanceOverrides(newOverrides);
+                        }}
+                        className="border flex-1"
+                        style={{
+                          backgroundColor: "var(--bg-primary)",
+                          borderColor: "var(--border)",
+                          color: "var(--text-primary)",
+                          opacity: 0.8,
+                        }}
+                      />
+                      <Input
+                        placeholder="Balance (wei, hex or decimal)"
+                        value={override.value}
+                        onChange={(e) => {
+                          const newOverrides = [...hypeBalanceOverrides];
+                          newOverrides[index].value = e.target.value;
+                          setHypeBalanceOverrides(newOverrides);
+                        }}
+                        className="border flex-1"
+                        style={{
+                          backgroundColor: "var(--bg-primary)",
+                          borderColor: "var(--border)",
+                          color: "var(--text-primary)",
+                          opacity: 0.8,
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const newOverrides = hypeBalanceOverrides.filter(
+                            (_, i) => i !== index
+                          );
+                          setHypeBalanceOverrides(newOverrides);
+                        }}
+                        className="h-8 w-8 p-0 text-red-400 hover:text-red-300"
+                      >
+                        ×
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setHypeBalanceOverrides([
+                        ...hypeBalanceOverrides,
+                        { key: "", value: "" },
+                      ]);
+                    }}
+                    className="w-full"
+                    style={{
+                      borderColor: "var(--border)",
+                      color: "var(--text-secondary)",
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Hype Balance Override
+                  </Button>
+                </CardContent>
+              )}
+            </Card>
+
+            {/* State Override */}
+            <Card
+              className="border"
+              style={{
+                backgroundColor: "rgba(30, 30, 30, 0.6)",
+                borderColor: "var(--border)",
+                backdropFilter: "blur(10px)",
+                opacity: isLeftSideComplete ? 1 : 0.5,
+                pointerEvents: isLeftSideComplete ? "auto" : "none",
+              }}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle
+                  className="text-primary"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  State Override
+                </CardTitle>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setStateOverrideContracts([
+                      ...stateOverrideContracts,
+                      {
+                        address: "",
+                        balanceOverrides: [],
+                        storageOverrides: [],
+                      },
+                    ]);
+                  }}
+                  className="h-6"
+                  style={{
+                    borderColor: "var(--border)",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Contract
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {stateOverrideContracts.map((contract, contractIndex) => (
+                  <div
+                    key={contractIndex}
+                    className="border border-gray-600 rounded-lg p-4 space-y-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-medium text-white">
+                        Contract {contractIndex + 1}
+                      </h4>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const newContracts = stateOverrideContracts.filter(
+                            (_, i) => i !== contractIndex
+                          );
+                          setStateOverrideContracts(newContracts);
+                        }}
+                        className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
+                      >
+                        ×
+                      </Button>
+                    </div>
+
+                    {/* Contract Address */}
+                    <div>
+                      <Label
+                        className="text-secondary mb-2 block"
+                        style={{ color: "var(--text-secondary)" }}
+                      >
+                        Contract Address
+                      </Label>
+                      <Input
+                        placeholder="0x..."
+                        value={contract.address}
+                        onChange={(e) => {
+                          const newContracts = [...stateOverrideContracts];
+                          newContracts[contractIndex].address = e.target.value;
+                          setStateOverrideContracts(newContracts);
+                        }}
+                        className="border"
+                        style={{
+                          backgroundColor: "var(--bg-primary)",
+                          borderColor: "var(--border)",
+                          color: "var(--text-primary)",
+                          opacity: 0.8,
+                        }}
+                      />
+                    </div>
+
+                    {/* Storage Overrides */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label
+                          className="text-secondary"
+                          style={{ color: "var(--text-secondary)" }}
+                        >
+                          Storage Overrides
+                        </Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const newContracts = [...stateOverrideContracts];
+                            newContracts[contractIndex].storageOverrides.push({
+                              key: "",
+                              value: "",
+                            });
+                            setStateOverrideContracts(newContracts);
+                          }}
+                          className="h-6"
+                          style={{
+                            borderColor: "var(--border)",
+                            color: "var(--text-secondary)",
+                          }}
+                        >
+                          <Plus className="h-3 w-3 mr-1" />
+                          Add Storage
+                        </Button>
+                      </div>
+                      <div className="space-y-2 pl-4 border-l-2 border-gray-600">
+                        {contract.storageOverrides.map((override, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center space-x-2"
+                          >
+                            <Input
+                              placeholder="Storage Key (0x...)"
+                              value={override.key}
+                              onChange={(e) => {
+                                const newContracts = [
+                                  ...stateOverrideContracts,
+                                ];
+                                newContracts[contractIndex].storageOverrides[
+                                  index
+                                ].key = e.target.value;
+                                setStateOverrideContracts(newContracts);
+                              }}
+                              className="border flex-1"
+                              style={{
+                                backgroundColor: "var(--bg-primary)",
+                                borderColor: "var(--border)",
+                                color: "var(--text-primary)",
+                                opacity: 0.8,
+                              }}
+                            />
+                            <Input
+                              placeholder="Storage Value (0x...)"
+                              value={override.value}
+                              onChange={(e) => {
+                                const newContracts = [
+                                  ...stateOverrideContracts,
+                                ];
+                                newContracts[contractIndex].storageOverrides[
+                                  index
+                                ].value = e.target.value;
+                                setStateOverrideContracts(newContracts);
+                              }}
+                              className="border flex-1"
+                              style={{
+                                backgroundColor: "var(--bg-primary)",
+                                borderColor: "var(--border)",
+                                color: "var(--text-primary)",
+                                opacity: 0.8,
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const newContracts = [
+                                  ...stateOverrideContracts,
+                                ];
+                                newContracts[contractIndex].storageOverrides =
+                                  newContracts[
+                                    contractIndex
+                                  ].storageOverrides.filter(
+                                    (_, i) => i !== index
+                                  );
+                                setStateOverrideContracts(newContracts);
+                              }}
+                              className="h-6 w-6 p-0 text-red-400 hover:text-red-300"
+                            >
+                              ×
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {stateOverrideContracts.length === 0 && (
+                  <div className="text-center text-gray-400 py-4">
+                    No contracts added. Click "Add Contract" to start.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Button
               type="submit"
-              className="w-full py-3" 
+              className="w-full py-3"
               disabled={!isLeftSideComplete || isLoading}
-              style={{ 
-                backgroundColor: isLeftSideComplete ? 'var(--btn-primary-bg)' : 'var(--text-secondary)', 
-                color: 'var(--btn-primary-text)' 
+              style={{
+                backgroundColor: isLeftSideComplete
+                  ? "var(--btn-primary-bg)"
+                  : "var(--text-secondary)",
+                color: "var(--btn-primary-text)",
               }}
             >
               {isLoading ? (
@@ -482,5 +1084,5 @@ export default function SimulatorPage() {
         </div>
       </form>
     </div>
-  )
-} 
+  );
+}

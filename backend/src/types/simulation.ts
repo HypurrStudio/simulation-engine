@@ -96,7 +96,7 @@ export interface CallTrace {
   from: string;
   to: string;
   gas: string;
-  gas_used: string;
+  gasUsed: string;
   input: string;
   subtraces: number;
   traceAddress: number[];

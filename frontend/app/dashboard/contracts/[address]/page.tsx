@@ -36,7 +36,7 @@ export default function ContractDetailsPage({
 
   const fetchBalance = async (address: string) => {
     try {
-      const provider = new ethers.JsonRpcProvider(process.env.NEXT_HYPEREVM_RPC_URL);
+      const provider = new ethers.JsonRpcProvider(process.env.NEXT_PUBLIC_HYPEREVM_RPC_URL);
       const balanceWei = await provider.getBalance(address);
       const balanceEth = ethers.formatEther(balanceWei);
       setBalance(parseFloat(balanceEth).toFixed(4));
@@ -50,14 +50,14 @@ export default function ContractDetailsPage({
     const loadContract = async () => {
       try {
         setIsLoading(true);
-        const simulationResponse = localStorage.getItem("simulationResponse");
+        const contractsData = localStorage.getItem("contractsStorage");
         
-        if (simulationResponse) {
-          const data = JSON.parse(simulationResponse);
+        if (contractsData) {
+          const data = JSON.parse(contractsData);
           
-          if (data.contracts && (data.contracts as any)[params.address]) {
+          if (data && (data as any)[params.address]) {
             // Type casting for indexing
-            const contractData = (data.contracts as any)[params.address];
+            const contractData = (data as any)[params.address];
             await fetchBalance(params.address);
             setContract({
               address: params.address,
@@ -110,7 +110,7 @@ export default function ContractDetailsPage({
             setContract(null);
           }
         } else {
-          // No simulation data
+          // No contracts data
           setContract(null);
         }
       } catch (error) {

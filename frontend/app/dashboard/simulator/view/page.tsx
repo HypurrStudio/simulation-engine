@@ -18,6 +18,8 @@ import BalanceStateTab from "./components/BalanceStateTab";
 import GasProfileTab from "./components/GasProfileTab";
 import StorageStateTab from "./components/StorageStateTab";
 import TransactionDetails from "./components/TransactionDetails";
+import EventsTab from "./components/EventsTab";
+import {response } from "../../../../response"
 
 export default function SimulatorViewPage() {
   const [responseData, setResponseData] = useState<any>(null);
@@ -90,10 +92,11 @@ export default function SimulatorViewPage() {
               input: trace.input || "0x",
               output: trace.output || "0x",
               gas: trace.gas,
-              gasUsed: trace.gas_used,
+              type: trace.type,
+              gasUsed: trace.gasUsed,
               error: trace.error || "",
               value: trace.value,
-              calls: trace.calls ? trace.calls.map(convertCallTrace) : undefined,
+              calls: trace.calls ? trace.calls?.map(convertCallTrace) : undefined,
             });
 
             const rawTrace = data.transaction?.callTrace
@@ -105,6 +108,8 @@ export default function SimulatorViewPage() {
 
               // Store the decoded trace for display
               setDecodedTraceTree(decodedData);
+
+              console.log("decodedData", decodedData);
 
               const logNode = (node: any, level: number = 0, index: number = 0) => {
                 const indent = "  ".repeat(level);
@@ -195,6 +200,7 @@ export default function SimulatorViewPage() {
     { id: "contracts", label: "Contracts" },
     { id: "balance", label: "Balance state" },
     { id: "storage", label: "Storage state" },
+    { id: "events", label: "Events" },
     { id: "gas-profiler", label: "Gas Profiler" },
   ];
 
@@ -282,7 +288,10 @@ export default function SimulatorViewPage() {
               <ContractsTab responseData={responseData} />
             ) : activeTab === "gas-profiler" ? (
               <GasProfileTab responseData={responseData} />
-            ) : (
+            ): activeTab === "events" ? (
+              <EventsTab responseData={responseData} />
+            ) 
+             : (
               <p className="text-gray-400 text-center">
                 Content for {tabs.find((t) => t.id === activeTab)?.label} tab
                 will appear here

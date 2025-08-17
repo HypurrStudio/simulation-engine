@@ -95,7 +95,7 @@ export default function TransactionDetails({ responseData, decodedTraceTree }: {
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-400">Block</span>
               <span className="text-sm text-white font-mono">
-                {responseData.transaction.blockHeader?.number || "0"}
+                {parseInt(responseData.transaction.blockHeader?.number) || "0"}
               </span>
             </div>
 
@@ -178,9 +178,9 @@ export default function TransactionDetails({ responseData, decodedTraceTree }: {
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-400">Tx Fee</span>
               <span className="text-sm text-white">
-                {responseData?.transaction?.callTrace?.[0]?.gas_used
+                {responseData?.transaction?.callTrace?.[0]?.gasUsed
                   ? (() => {
-                      const gasUsed = parseInt(responseData.transaction.callTrace[0].gas_used, 16);
+                      const gasUsed = parseInt(responseData.transaction.callTrace[0].gasUsed, 16);
                       const gasPrice = parseInt(responseData.transaction.gasPrice || "0", 16);
                       const feeWei = gasUsed * gasPrice;
                       const feeEth = feeWei / 1e18; // assuming HYPE uses 18 decimals like ETH
@@ -204,14 +204,14 @@ export default function TransactionDetails({ responseData, decodedTraceTree }: {
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-400">Gas Used</span>
               <span className="text-sm text-white">
-                {responseData?.transaction?.callTrace[0]?.gas_used
+                {responseData?.transaction?.callTrace[0]?.gasUsed
                   ? `${formatGas(
-                      responseData?.transaction?.callTrace[0]?.gas_used
+                      responseData?.transaction?.callTrace[0]?.gasUsed
                     )} / ${formatGas(
                       responseData.transaction.gas
                     )} (${Math.round(
                       (parseInt(
-                        responseData?.transaction?.callTrace[0]?.gas_used,
+                        responseData?.transaction?.callTrace[0]?.gasUsed,
                         16
                       ) /
                         parseInt(responseData.transaction.gas, 16)) *

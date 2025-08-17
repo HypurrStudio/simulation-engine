@@ -11,13 +11,14 @@ export interface CallTraceItem {
   to: string
   error: string
   gas: string
-  gas_used: string
+  gasUsed: string
   input: string
   subtraces: number
   traceAddress: number[]
   output: string
   value: string
   calls: CallTraceItem[]
+  type: string
 }
 
 export interface DisplayTraceItem {
@@ -26,6 +27,7 @@ export interface DisplayTraceItem {
   to: string
   gas: string
   gasUsed: string
+  type: string
   input: string
   error: string
   output: string
@@ -36,34 +38,63 @@ export interface DisplayTraceItem {
   level: number
   isExpanded: boolean
 }
+// ---- helpers ----
+const asArray = <T>(x: T | T[] | undefined | null): T[] =>
+  Array.isArray(x) ? x : (x ? [x] : []);
 
-export function parseCallTrace(callTrace: CallTraceItem[], expanded: boolean = false): DisplayTraceItem[] {
-  const parseItem = (item: CallTraceItem, level: number = 0): DisplayTraceItem => {
+const safeArr = <T>(x?: T[]): T[] => (Array.isArray(x) ? x : []);
+
+let autoId = 0;
+const genId = (traceAddress: number[] | undefined, fallbackBits: string) => {
+  const ta = safeArr(traceAddress);
+  return ta.length ? ta.join("-") : `node-${fallbackBits}-${autoId++}`;
+};
+
+/**
+ * Parse a call trace tree into display nodes, defensively handling absent fields.
+ * Accepts either an array of root nodes or a single root node.
+ */
+export function parseCallTrace(
+  callTrace: CallTraceItem[] | CallTraceItem | undefined | null,
+  expanded: boolean = false
+): DisplayTraceItem[] {
+  const roots = asArray(callTrace);
+
+  const parseItem = (item: CallTraceItem, level: number, siblingIndex: number): DisplayTraceItem => {
+    const traceAddress = safeArr(item.traceAddress);
+    const id = genId(traceAddress, `${level}-${siblingIndex}`);
+
+    const childrenIn = safeArr(item.calls);
+    const childrenOut = childrenIn.map((child, idx) => parseItem(child, level + 1, idx));
+
     return {
-      id: item.traceAddress.join('-') || 'root',
-      from: item.from,
-      to: item.to,
+      id,
+      from: item.from ?? "0x",
+      to: item.to ?? "0x",
       gas: item.gas,
-      gasUsed: item.gas_used,
+      type: item.type,
+      gasUsed: item.gasUsed,
       error: item.error,
       input: item.input,
       output: item.output,
       value: item.value,
       subtraces: item.subtraces,
-      traceAddress: item.traceAddress,
-      calls: item.calls.map(call => parseItem(call, level + 1)),
+      traceAddress,
+      calls: childrenOut,
       level,
-      isExpanded: expanded
-    }
-  }
+      isExpanded: expanded,
+    };
+  };
 
-  return callTrace.map(item => parseItem(item))
+  return roots.map((root, i) => parseItem(root, 0, i));
 }
 
 export function formatAddress(address: string): string {
   if (!address) return ''
   return `${address.slice(0, 6)}...${address.slice(-4)}`
 }
+
+
 
 export function formatGas(gas: string): string {
   if (!gas) return '0'
