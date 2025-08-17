@@ -85,19 +85,19 @@ export default function TransactionTracePage() {
           const manual = new TraceDecoderManual(contracts);
 
           // Convert callTrace item to decoder format (defensive)
-         // wherever you have convertCallTrace:
-const convertCallTrace = (trace: any): any => ({
-  from: trace?.from || "",
-  to: trace?.to || "",
-  input: trace?.input || "0x",
-  output: trace?.output || "0x",
-  gas: trace?.gas ?? trace?.gasUsed ?? trace?.gas_used,           // ← add fallbacks
-  gasUsed: trace?.gas_used ?? trace?.gasUsed ?? trace?.gas,       // ← add fallbacks
-  error: trace?.error || "",
-  value: trace?.value,
-  calls: Array.isArray(trace?.calls) ? trace.calls.map(convertCallTrace) : undefined,
-});
-
+          // wherever you have convertCallTrace:
+          const convertCallTrace = (trace: any): any => ({
+            from: trace?.from || "",
+            to: trace?.to || "",
+            input: trace?.input || "0x",
+            output: trace?.output || "0x",
+            gas: trace?.gas ?? trace?.gasUsed ?? trace?.gas_used,           // ← add fallbacks
+            gasUsed: trace?.gas_used ?? trace?.gasUsed ?? trace?.gas,       // ← add fallbacks
+            error: trace?.error || "",
+            value: trace?.value,
+            type: trace?.type,
+            calls: Array.isArray(trace?.calls) ? trace.calls.map(convertCallTrace) : undefined,
+          });
 
           // Your API returns the same shape as simulator: data.transaction.callTrace = [root...]
           const rawRoot = data.transaction?.callTrace?.[0]
