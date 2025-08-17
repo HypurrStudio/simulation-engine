@@ -11,7 +11,6 @@ import StorageStateTab from "@/app/dashboard/simulator/view/components/StorageSt
 import TransactionDetails from "@/app/dashboard/simulator/view/components/TransactionDetails";
 import EventsTab from "../../simulator/view/components/EventsTab";
 
-
 export default function TransactionTracePage() {
   const router = useRouter();
   const params = useParams<{ hash: string }>();
@@ -29,10 +28,10 @@ export default function TransactionTracePage() {
   const [error, setError] = useState<string | null>(null);
 
   // Build API URL (configure base via NEXT_PUBLIC_TRACE_API_BASE when not localhost)
-  
-  const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/trace/tx?txHash=${encodeURIComponent(
-    txHash
-  )}`;
+
+  const url = `${
+    process.env.NEXT_PUBLIC_BACKEND_URL
+  }/api/trace/tx?txHash=${encodeURIComponent(txHash)}`;
 
   useEffect(() => {
     if (!txHash) return;
@@ -57,38 +56,48 @@ export default function TransactionTracePage() {
             "@/utils/decodeCallTrace"
           );
 
+          // build a proxy-aware contracts map
           const contracts: Record<string, any> = {};
-          if (data.contracts) {
-            Object.entries(data.contracts).forEach(
-              ([addr, contract]: [string, any]) => {
-                contracts[addr] = {
-                  address: addr,
-                  ABI: contract.ABI,
-                  Implementation: contract.Implementation,
-                  Proxy:
-                    contract.Proxy || (contract.Implementation ? "1" : "0"),
-                };
+          Object.entries(data.contracts ?? {}).forEach(
+            ([addr, contract]: [string, any]) => {
+              const rec = {
+                address: addr,
+                ABI: contract.ABI,
+                Implementation: contract.Implementation,
+                Proxy: contract.Proxy || (contract.Implementation ? "1" : "0"),
+              };
+              contracts[addr] = rec;
+
+              // ⭐ new: also key the ABI by implementation address so the decoder can find it
+              if (contract.Implementation && contract.ABI) {
+                const implAddr = String(contract.Implementation);
+                if (!contracts[implAddr]) {
+                  contracts[implAddr] = {
+                    address: implAddr,
+                    ABI: contract.ABI,
+                    Proxy: "0",
+                  };
+                }
               }
-            );
-          }
+            }
+          );
 
           const manual = new TraceDecoderManual(contracts);
 
           // Convert callTrace item to decoder format (defensive)
-          const convertCallTrace = (trace: any): any => ({
-            from: trace?.from || "",
-            to: trace?.to || "",
-            input: trace?.input || "0x",
-            output: trace?.output || "0x",
-            gas: trace?.gas,
-            type: trace?.type,
-            gasUsed: trace?.gasUsed,
-            error: trace?.error || "",
-            value: trace?.value,
-            calls: Array.isArray(trace?.calls)
-              ? trace.calls.map(convertCallTrace)
-              : undefined,
-          });
+         // wherever you have convertCallTrace:
+const convertCallTrace = (trace: any): any => ({
+  from: trace?.from || "",
+  to: trace?.to || "",
+  input: trace?.input || "0x",
+  output: trace?.output || "0x",
+  gas: trace?.gas ?? trace?.gasUsed ?? trace?.gas_used,           // ← add fallbacks
+  gasUsed: trace?.gas_used ?? trace?.gasUsed ?? trace?.gas,       // ← add fallbacks
+  error: trace?.error || "",
+  value: trace?.value,
+  calls: Array.isArray(trace?.calls) ? trace.calls.map(convertCallTrace) : undefined,
+});
+
 
           // Your API returns the same shape as simulator: data.transaction.callTrace = [root...]
           const rawRoot = data.transaction?.callTrace?.[0]
@@ -273,7 +282,7 @@ export default function TransactionTracePage() {
             ) : activeTab === "contracts" ? (
               <ContractsTab responseData={responseData} />
             ) : activeTab === "gas-profiler" ? (
-                <GasProfileTab responseData={responseData} />
+              <GasProfileTab responseData={responseData} />
             ) : activeTab === "events" ? (
               <EventsTab responseData={responseData} />
             ) : (

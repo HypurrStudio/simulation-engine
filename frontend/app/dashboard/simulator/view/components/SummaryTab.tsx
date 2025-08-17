@@ -37,6 +37,51 @@ export default function SummaryTab({
     return n.toString();
   };
 
+  // Expandable text (for decoded JSON, args, etc.)
+  const ExpandableText = ({
+    label,
+    value,
+    previewLen = 120,
+    color = "text-gray-300",
+  }: {
+    label: string;
+    value: string;
+    previewLen?: number;
+    color?: string;
+  }) => {
+    const [open, setOpen] = useState(false);
+
+    const isLong = value.length > previewLen;
+    const preview = isLong ? value.slice(0, previewLen) + "…" : value;
+
+    return (
+      <div className="text-xs break-words">
+        <span className={`${color}`}>{label}: </span>
+        {!open ? (
+          <span
+            className={`${color} ${
+              isLong
+                ? "underline decoration-dotted hover:decoration-solid cursor-pointer"
+                : ""
+            } break-all`}
+            onClick={() => isLong && setOpen(true)}
+            title={isLong ? "Click to expand" : undefined}
+          >
+            {preview}
+          </span>
+        ) : (
+          <span
+            className={`${color} break-all cursor-pointer`}
+            onClick={() => setOpen(false)}
+            title="Click to collapse"
+          >
+            {value}
+          </span>
+        )}
+      </div>
+    );
+  };
+
   const formatEth = (ethStr?: string) => {
     if (!ethStr) return "0 HYPE";
     const n = Number(ethStr);
@@ -86,7 +131,8 @@ export default function SummaryTab({
 
     // Determine color based on label
     const labelColor = label === "input" ? "text-green-300" : "text-orange-300";
-    const contentColor = label === "input" ? "text-green-300" : "text-orange-300";
+    const contentColor =
+      label === "input" ? "text-green-300" : "text-orange-300";
 
     return (
       <div className="text-xs break-words">
@@ -223,27 +269,34 @@ export default function SummaryTab({
 
             {/* Input parameters */}
             {hasValues(trace.inputDecoded) ? (
-              <div className="text-green-300 text-xs break-words">
-                <span className="text-green-300">input: </span>
-                <span className="text-green-300">{prettyJson(trace.inputDecoded)}</span>
-              </div>
+              <ExpandableText
+                label="input"
+                value={prettyJson(trace.inputDecoded)}
+                color="text-green-300"
+              />
             ) : (
-              // If no decoded input but raw hex present, show hex **without the selector**
               trace.inputRaw &&
               trace.inputRaw !== "0x" && (
-                <ExpandableHex label="input" hex={trace.inputRaw} cropSelector />
+                <ExpandableHex
+                  label="input"
+                  hex={trace.inputRaw}
+                  cropSelector
+                />
               )
             )}
 
-            {/* Output values: prefer decoded; else show raw hex if present */}
+            {/* Output values */}
             {hasValues(trace.outputDecoded) ? (
-              <div className="text-orange-300 text-xs break-words">
-                <span className="text-orange-300">output: </span>
-                <span className="text-orange-300">{prettyJson(trace.outputDecoded)}</span>
-              </div>
+              <ExpandableText
+                label="output"
+                value={prettyJson(trace.outputDecoded)}
+                color="text-orange-300"
+              />
             ) : (
               trace.outputRaw &&
-              trace.outputRaw !== "0x" && <ExpandableHex label="output" hex={trace.outputRaw} />
+              trace.outputRaw !== "0x" && (
+                <ExpandableHex label="output" hex={trace.outputRaw} />
+              )
             )}
 
             {/* Value transfer (use valueEth/valueWei from decoder) */}
@@ -335,12 +388,12 @@ export default function SummaryTab({
       }
       return formatted;
     }
-    
+
     // If no decoded output, try to show raw output
     if (outputRaw && outputRaw !== "0x") {
       return { raw: outputRaw };
     }
-    
+
     // No output data available
     return {};
   };
@@ -385,10 +438,7 @@ export default function SummaryTab({
                         <br />
                         {Object.entries(inputData).map(
                           ([key, value], index) => (
-                            <div
-                              key={index}
-                              className="whitespace-pre-wrap break-all"
-                            >
+                            <div key={index} className="whitespace-pre ">
                               <span className="text-gray-400"> </span>
                               <code className="text-green-300">
                                 "{String(key).split("_")[0]}"
@@ -436,10 +486,7 @@ export default function SummaryTab({
                         <br />
                         {Object.entries(outputData).map(
                           ([key, value], index) => (
-                            <div
-                              key={index}
-                              className="whitespace-pre-wrap break-all"
-                            >
+                            <div key={index} className="whitespace-pre">
                               <span className="text-gray-400"> </span>
                               <code className="text-green-300">"{key}"</code>
                               <code className="text-gray-300">: </code>
