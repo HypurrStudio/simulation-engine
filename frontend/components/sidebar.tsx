@@ -11,7 +11,7 @@ export function Sidebar() {
   const explorerRoot = { href: "/dashboard/explorer", label: "Explorer" }
 
   const subItems = [
-    { href: "/dashboard/transactions",  label: "Transactions", disabled: true },
+    { href: "/dashboard/transactions",  label: "Transactions", disabled: false },
     { href: "/dashboard/contracts",     label: "Contracts", disabled: false },
     { href: "/dashboard/simulator",     label: "Simulator", disabled: false },
   ]
