@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import SummaryTab from "@/app/dashboard/simulator/view/components/SummaryTab";
-import ContractsTab from "@/app/dashboard/simulator/view/components/ContractsTab";
-import BalanceStateTab from "@/app/dashboard/simulator/view/components/BalanceStateTab";
-import GasProfileTab from "@/app/dashboard/simulator/view/components/GasProfileTab";
-import StorageStateTab from "@/app/dashboard/simulator/view/components/StorageStateTab";
-import TransactionDetails from "@/app/dashboard/simulator/view/components/TransactionDetails";
-import EventsTab from "../../simulator/view/components/EventsTab";
+import SummaryTab from "@/app/dashboard/simulator/[slug]/view/components/SummaryTab";
+import ContractsTab from "@/app/dashboard/simulator/[slug]/view/components/ContractsTab";
+import BalanceStateTab from "@/app/dashboard/simulator/[slug]/view/components/BalanceStateTab";
+import GasProfileTab from "@/app/dashboard/simulator/[slug]/view/components/GasProfileTab";
+import StorageStateTab from "@/app/dashboard/simulator/[slug]/view/components/StorageStateTab";
+import TransactionDetails from "@/app/dashboard/simulator/[slug]/view/components/TransactionDetails";
+import EventsTab from "../../simulator/[slug]/view/components/EventsTab";
 
 export default function TransactionTracePage() {
   const router = useRouter();

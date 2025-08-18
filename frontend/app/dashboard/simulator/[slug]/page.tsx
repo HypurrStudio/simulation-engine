@@ -14,7 +14,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChevronDown, ChevronUp, Loader2, Plus } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   fetchContractABI,
   ContractABI,
@@ -23,8 +23,131 @@ import {
   encodeFunctionCall,
 } from "@/lib/etherscan";
 
+function serializeToQuery(
+  form: {
+    from: string;
+    to: string;
+    input: string;
+    value: string;
+    gas: string;
+    gasPrice: string;
+    blockNumber: string;
+  },
+  hypeBalanceOverrides: Array<{ key: string; value: string }>,
+  stateOverrideContracts: Array<{
+    address: string;
+    storageOverrides: Array<{ key: string; value: string }>;
+  }>
+) {
+  // Build stateObjects like your submit path does
+  const stateObjects: Record<
+    string,
+    { balance?: string; stateDiff?: Record<string, string> }
+  > = {};
+  const ensure0x = (v: string) =>
+    v?.startsWith("0x") || v?.startsWith("0X") ? v : `0x${v || "0"}`;
+
+  // balances
+  for (const { key, value } of hypeBalanceOverrides) {
+    const addr = (key || "").trim();
+    const bal = (value || "").trim();
+    if (!addr || !bal) continue;
+    if (!stateObjects[addr]) stateObjects[addr] = {};
+    stateObjects[addr].balance = bal;
+  }
+  // storage
+  for (const c of stateOverrideContracts) {
+    const addr = (c.address || "").trim();
+    if (!addr) continue;
+    const diff: Record<string, string> = {};
+    for (const { key, value } of c.storageOverrides || []) {
+      const k = (key || "").trim();
+      const v = (value || "").trim();
+      if (!k || !v) continue;
+      diff[ensure0x(k)] = ensure0x(v);
+    }
+    if (Object.keys(diff).length) {
+      if (!stateObjects[addr]) stateObjects[addr] = {};
+      stateObjects[addr].stateDiff = {
+        ...(stateObjects[addr].stateDiff || {}),
+        ...diff,
+      };
+    }
+  }
+
+  const qs = new URLSearchParams();
+  if (form.blockNumber) qs.set("block", form.blockNumber.trim());
+  if (form.from) qs.set("from", form.from.trim());
+  if (form.to) qs.set("to", form.to.trim());
+  if (form.gas) qs.set("gas", form.gas.trim());
+  if (form.gasPrice) qs.set("gasPrice", form.gasPrice.trim());
+  if (form.value) qs.set("value", form.value.trim());
+  if (form.input) qs.set("input", form.input.trim());
+  if (Object.keys(stateObjects).length) {
+    qs.set("stateOverrides", JSON.stringify(stateObjects));
+  }
+  return qs.toString();
+}
+
+function deserializeFromQuery(searchParams: URLSearchParams) {
+  const form = {
+    from: searchParams.get("from") || "",
+    to: searchParams.get("to") || "",
+    input: searchParams.get("input") || "",
+    value: searchParams.get("value") || "",
+    gas: searchParams.get("gas") || "",
+    gasPrice: searchParams.get("gasPrice") || "",
+    blockNumber: searchParams.get("block") || "",
+  };
+
+  let hypeBalanceOverrides: Array<{ key: string; value: string }> = [];
+  let stateOverrideContracts: Array<{
+    address: string;
+    storageOverrides: Array<{ key: string; value: string }>;
+  }> = [];
+
+  const so = searchParams.get("stateOverrides");
+  if (so) {
+    try {
+      const parsed = JSON.parse(so) as Record<
+        string,
+        { balance?: string; stateDiff?: Record<string, string> }
+      >;
+      // balances → hypeBalanceOverrides
+      hypeBalanceOverrides = Object.entries(parsed)
+        .filter(([_, o]) => o.balance)
+        .map(([address, o]) => ({ key: address, value: o.balance as string }));
+
+      // stateDiff → stateOverrideContracts (group by address)
+      const stor: Array<{
+        address: string;
+        balanceOverrides: Array<{ key: string; value: string }>;
+        storageOverrides: Array<{ key: string; value: string }>;
+      }> = [];
+
+      for (const [address, o] of Object.entries(parsed)) {
+        if (o.stateDiff && Object.keys(o.stateDiff).length) {
+          stor.push({
+            address,
+            balanceOverrides: [], // <-- ensure this key exists per your state type
+            storageOverrides: Object.entries(o.stateDiff).map(([k, v]) => ({
+              key: k,
+              value: v,
+            })),
+          });
+        }
+      }
+      stateOverrideContracts = stor;
+    } catch {}
+  }
+  return { form, hypeBalanceOverrides, stateOverrideContracts };
+}
+
 export default function SimulatorPage() {
   const router = useRouter();
+  const params = useParams<{ slug: string }>();
+  const slug = params?.slug || "v1";
+
   const [formData, setFormData] = useState({
     from: "",
     to: "",
@@ -36,11 +159,11 @@ export default function SimulatorPage() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [inputType, setInputType] = useState<"function" | "raw">("function");
-  const [usePendingBlock, setUsePendingBlock] = useState(true);
-  const [overrideBlockNumber, setOverrideBlockNumber] = useState(false);
   const [transactionParamsExpanded, setTransactionParamsExpanded] =
     useState(true);
-  const [blockHeaderExpanded, setBlockHeaderExpanded] = useState(true);
+  const [inputOrigin, setInputOrigin] = useState<
+    "hydrate" | "raw" | "function" | null
+  >(null);
 
   // Etherscan ABI
   const [contractABI, setContractABI] = useState<ContractABI | null>(null);
@@ -61,105 +184,62 @@ export default function SimulatorPage() {
   const [stateOverrideContracts, setStateOverrideContracts] = useState<
     Array<{
       address: string;
-      balanceOverrides: Array<{ key: string; value: string }>; // not used in UI; kept for type compat
+      balanceOverrides: Array<{ key: string; value: string }>;
       storageOverrides: Array<{ key: string; value: string }>;
     }>
   >([]);
 
-  // ---------------- Helpers ----------------
-  const ensure0x = (v: string) => {
-    if (!v) return "0x0";
-    const s = v.trim();
-    return s.startsWith("0x") || s.startsWith("0X") ? s : "0x" + s;
-  };
+  useEffect(() => {
+    // Only hydrate if URL has meaningful params
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if ([...sp.keys()].length === 0) return;
 
-  const normalizeAddr = (a: string) => (a || "").trim();
+    const {
+      form,
+      hypeBalanceOverrides: balances,
+      stateOverrideContracts: stor,
+    } = deserializeFromQuery(sp);
 
-  const toHex = (value: string, isDecimal: boolean = false): string => {
-    if (!value) return "0x0";
-    if (value.startsWith("0x") || value.startsWith("0X")) return value;
-    if (isDecimal) {
-      const num = parseFloat(value);
-      if (isNaN(num)) return "0x0";
-      return (
-        "0x" +
-        Math.floor(num * Math.pow(10, 18))
-          .toString(16)
-          .toUpperCase()
+    setFormData((prev) => ({ ...prev, ...form }));
+    setHypeBalanceOverrides(balances);
+    // Ensure every contract object has balanceOverrides: []
+    const storNorm = (
+      stor as Array<{
+        address: string;
+        storageOverrides: { key: string; value: string }[];
+        balanceOverrides?: { key: string; value: string }[];
+      }>
+    ).map((c) => ({
+      address: c.address,
+      storageOverrides: c.storageOverrides ?? [],
+      balanceOverrides: c.balanceOverrides ?? [], // <-- add default
+    }));
+
+    setStateOverrideContracts(storNorm);
+    setInputOrigin("hydrate");
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const qs = serializeToQuery(
+        formData,
+        hypeBalanceOverrides,
+        stateOverrideContracts
       );
-    } else {
-      try {
-        if (value.length > 15) {
-          const big = BigInt(value);
-          return "0x" + big.toString(16).toUpperCase();
-        } else {
-          const n = parseInt(value, 10);
-          if (isNaN(n)) return "0x0";
-          return "0x" + n.toString(16).toUpperCase();
-        }
-      } catch {
-        return "0x0";
+      const nextSlug = "v1";
+      // avoid infinite replaces: only replace if URL differs
+      const next = `/dashboard/simulator/${encodeURIComponent(nextSlug)}?${qs}`;
+      const current = `${window.location.pathname}${window.location.search}`;
+      if (next !== current) {
+        // soft replace — same page, new URL
+        router.replace(next, { scroll: false });
       }
-    }
-  };
+    }, 350); // debounce a bit
 
-  // Build stateObjects from UI sections
-  const buildStateObjects = () => {
-    const stateObjects: Record<
-      string,
-      { balance?: string; stateDiff?: Record<string, string> }
-    > = {};
+    return () => clearTimeout(t);
+  }, [formData, hypeBalanceOverrides, stateOverrideContracts, router]);
 
-    // 1) Hype Balance State (per-address balances)
-    for (const { key, value } of hypeBalanceOverrides) {
-      const addr = normalizeAddr(key);
-      const bal = value?.trim();
-      if (!addr || !bal) continue;
-      if (!stateObjects[addr]) stateObjects[addr] = {};
-      // balances may be typed in as hex or decimal wei; respect hex if provided
-      stateObjects[addr].balance =
-        bal.startsWith("0x") || bal.startsWith("0X") ? bal : toHex(bal, false);
-    }
-
-    // 2) State Override per-contract (storage stateDiff)
-    for (const c of stateOverrideContracts) {
-      const addr = normalizeAddr(c.address);
-      if (!addr) continue;
-
-      // Gather storage overrides (key/value must be hex; ensure 0x prefix)
-      const diff: Record<string, string> = {};
-      for (const { key, value } of c.storageOverrides || []) {
-        const k = key?.trim();
-        const v = value?.trim();
-        if (!k || !v) continue;
-        diff[ensure0x(k)] = ensure0x(v);
-      }
-
-      // Only attach stateDiff if we have at least one pair
-      if (Object.keys(diff).length > 0) {
-        if (!stateObjects[addr]) stateObjects[addr] = {};
-        // merge with any existing stateDiff (e.g., if user added another block for same addr)
-        stateObjects[addr].stateDiff = {
-          ...(stateObjects[addr].stateDiff || {}),
-          ...diff,
-        };
-      }
-    }
-
-    // Remove any empty objects (no balance & no stateDiff)
-    for (const [addr, obj] of Object.entries(stateObjects)) {
-      if (
-        !obj.balance &&
-        (!obj.stateDiff || Object.keys(obj.stateDiff).length === 0)
-      ) {
-        delete stateObjects[addr];
-      }
-    }
-
-    return stateObjects;
-  };
-
-  // ---------------- Effects ----------------
   useEffect(() => {
     const fetchABI = async () => {
       if (!formData.to.trim()) {
@@ -205,66 +285,39 @@ export default function SimulatorPage() {
         functionParameters,
         contractABI
       );
+      setInputOrigin("function");
+
       setFormData((prev) => ({ ...prev, input: encodedInput }));
     }
   }, [selectedFunction, functionParameters, contractABI]);
 
-  // ---------------- Submit ----------------
+  // replace your previous auto-raw effect with:
+  useEffect(() => {
+    if (!formData.input || formData.input.trim() === "") return;
+
+    // Only flip to RAW if the latest writer was URL hydration or the user editing the raw box.
+    if (inputOrigin === "hydrate" || inputOrigin === "raw") {
+      setInputType("raw");
+    }
+    // If the function encoder wrote it, do nothing (stay on "function").
+  }, [formData.input, inputOrigin]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-
     try {
-      const stateObjects = buildStateObjects();
-
-      const requestBody = {
-        from: formData.from,
-        to: formData.to,
-        input: formData.input,
-        value: toHex(formData.value, false), // raw wei -> hex
-        gas: toHex(formData.gas, false),
-        gasPrice: toHex(formData.gasPrice, false),
-        generateAccessList: true,
-        blockNumber: formData.blockNumber
-          ? toHex(formData.blockNumber, false)
-          : "latest",
-        // NEW: include stateObjects exactly as required
-        stateObjects,
-      };
-
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/simulate`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody),
-        }
+      const qs = serializeToQuery(
+        formData,
+        hypeBalanceOverrides,
+        stateOverrideContracts
       );
-
-      if (!response.ok)
-        throw new Error(`HTTP error! status: ${response.status}`);
-      const responseData = await response.json();
-
-      // persist
-      localStorage.setItem("simulationResponse", JSON.stringify(responseData));
-      if (responseData.contracts) {
-        const existingContracts = JSON.parse(
-          localStorage.getItem("contractsStorage") || "{}"
-        );
-        const newContracts = { ...existingContracts };
-        Object.entries(responseData.contracts).forEach(
-          ([address, contractData]: [string, any]) => {
-            if (!existingContracts[address])
-              newContracts[address] = contractData;
-          }
-        );
-        localStorage.setItem("contractsStorage", JSON.stringify(newContracts));
-      }
-
-      router.push("/dashboard/simulator/view");
-    } catch (error) {
-      console.error("Simulation failed:", error);
-      alert("Simulation failed. Please try again.");
+      const slug = "v1";
+      router.push(
+        `/dashboard/simulator/${encodeURIComponent(slug)}/view?${qs}`
+      );
+    } catch (err) {
+      console.error(err);
+      alert("Could not prepare the shareable URL.");
     } finally {
       setIsLoading(false);
     }
@@ -292,7 +345,7 @@ export default function SimulatorPage() {
   // ---------------- Render ----------------
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
-      <div className="mb-8">
+      <div className="mb-2">
         <h1 className="text-3xl font-bold">New Simulation</h1>
       </div>
 
@@ -402,7 +455,10 @@ export default function SimulatorPage() {
                           id="function"
                           name="inputType"
                           checked={inputType === "function"}
-                          onChange={() => setInputType("function")}
+                          onChange={() => {
+                            setInputType("function");
+                            setInputOrigin("function");
+                          }}
                           style={{ accentColor: "var(--color-primary)" }}
                         />
                         <Label
@@ -419,7 +475,10 @@ export default function SimulatorPage() {
                           id="raw"
                           name="inputType"
                           checked={inputType === "raw"}
-                          onChange={() => setInputType("raw")}
+                          onChange={() => {
+                            setInputType("raw");
+                            setInputOrigin("raw");
+                          }}
                           style={{ accentColor: "var(--color-primary)" }}
                         />
                         <Label
@@ -543,9 +602,10 @@ export default function SimulatorPage() {
                         <Textarea
                           placeholder="Enter raw input data (hex format)"
                           value={formData.input}
-                          onChange={(e) =>
-                            setFormData({ ...formData, input: e.target.value })
-                          }
+                          onChange={(e) => {
+                            setInputOrigin("raw");
+                            setFormData({ ...formData, input: e.target.value });
+                          }}
                           className="border"
                           style={{
                             backgroundColor: "var(--bg-primary)",
@@ -744,7 +804,7 @@ export default function SimulatorPage() {
                 pointerEvents: isLeftSideComplete ? "auto" : "none",
               }}
             >
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pt-2 pb-2">
                 <CardTitle
                   className="text-primary"
                   style={{ color: "var(--text-primary)" }}
@@ -857,7 +917,7 @@ export default function SimulatorPage() {
                 pointerEvents: isLeftSideComplete ? "auto" : "none",
               }}
             >
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pt-4 pb-2">
                 <CardTitle
                   className="text-primary"
                   style={{ color: "var(--text-primary)" }}
@@ -894,7 +954,7 @@ export default function SimulatorPage() {
                 {stateOverrideContracts.map((contract, contractIndex) => (
                   <div
                     key={contractIndex}
-                    className="border border-gray-600 rounded-lg p-4 space-y-4"
+                    className="border border-gray-600 rounded-xl p-4 mt-1 space-y-4"
                   >
                     <div className="flex items-center justify-between">
                       <h4 className="text-sm font-medium text-white">
@@ -1053,7 +1113,7 @@ export default function SimulatorPage() {
                 ))}
 
                 {stateOverrideContracts.length === 0 && (
-                  <div className="text-center text-gray-400 py-4">
+                  <div className="text-center text-gray-400 py-2">
                     No contracts added. Click "Add Contract" to start.
                   </div>
                 )}
@@ -1074,7 +1134,7 @@ export default function SimulatorPage() {
               {isLoading ? (
                 <div className="flex items-center space-x-2">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  <span>Simulating...</span>
+                  <span>Preparing…</span>
                 </div>
               ) : (
                 "Simulate Transaction"
