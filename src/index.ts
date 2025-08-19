@@ -4,6 +4,9 @@ import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
+import swaggerUi from 'swagger-ui-express';
+import swaggerJsdoc from 'swagger-jsdoc';
+import swaggerConfig from './config/swagger';
 
 import config from './config';
 import logger, { stream } from './utils/logger';
@@ -38,6 +41,10 @@ class App {
       origin: config.cors.origin,
       credentials: true,
     }));
+
+    // Swagger Documentation
+    const specs = swaggerJsdoc(swaggerConfig);
+    this.app.use('/swagger', swaggerUi.serve, swaggerUi.setup(specs));
 
     // Compression middleware
     this.app.use(compression());

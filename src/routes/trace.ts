@@ -8,8 +8,36 @@ import { SimulationRequest } from '../types/simulation';
 const router = Router();
 
 /**
- * GET /api/trace/tx?txHash=<txHash>
- * Trace a transaction by hash and return simulation response
+ * @swagger
+ * /api/trace/tx:
+ *   get:
+ *     summary: Trace a transaction by hash
+ *     tags: [Transaction Trace]
+ *     parameters:
+ *       - in: query
+ *         name: txHash
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The hash of the transaction to trace
+ *     responses:
+ *       200:
+ *         description: Transaction trace successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 result:
+ *                   type: object
+ *       400:
+ *         description: Missing or invalid txHash parameter
+ *       404:
+ *         description: Transaction not found
+ *       500:
+ *         description: Internal server error
  */
 router.get('/tx', asyncHandler(async (req: Request, res: Response) => {
   const requestId = req.headers['x-request-id'] as string || 'unknown';
