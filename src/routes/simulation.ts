@@ -246,7 +246,7 @@ router.post('/bundle/simulate', asyncHandler(async (req: Request, res: Response)
 
   logger.info('Bundle simulation request completed');
 
-  res.json({ results: responses });
+  res.json(responses);
 }));
 
 /**
