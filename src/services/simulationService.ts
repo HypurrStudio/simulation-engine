@@ -225,6 +225,7 @@ export class SimulationService {
       value: this.toHex(request.value || '0x0'),
       gas: this.toHex(request.gas?.toString() || '1000000'),
       gasPrice: request.gasPrice ? this.toHex(request.gasPrice) : undefined,
+      accessList: request?.accessList,
     };
   }
 

@@ -12,6 +12,7 @@ export interface RPCCallParam {
   value: string;
   gas: string | number;
   gasPrice?: string;
+  accessList?: AccessListResult["accessList"];
 }
 
 export interface RPCTraceParam {
