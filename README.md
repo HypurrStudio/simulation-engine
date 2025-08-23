@@ -1,6 +1,6 @@
 # HyperEVM Transaction Simulation Engine
 
-A production-grade backend service for simulating Ethereum transactions on HyperEVM networks.
+A production-grade backend service for simulating transactions on HyperEVM networks.
 
 ## Features
 

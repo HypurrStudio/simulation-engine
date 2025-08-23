@@ -11,7 +11,7 @@ const router = Router();
  * @swagger
  * /api/simulate:
  *   post:
- *     summary: Simulate an Ethereum transaction
+ *     summary: Simulate an HyperEVM transaction
  *     tags: [Simulation]
  *     requestBody:
  *       required: true
@@ -124,7 +124,7 @@ router.post('/simulate', asyncHandler(async (req: Request, res: Response) => {
  * @swagger
  * /api/bundle/simulate:
  *   post:
- *     summary: Simulate a bundle of Ethereum transactions
+ *     summary: Simulate a bundle of HyperEVM transactions
  *     tags: [Simulation]
  *     requestBody:
  *       required: true
