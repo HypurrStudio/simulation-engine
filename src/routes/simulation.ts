@@ -221,8 +221,6 @@ router.post('/simulate', asyncHandler(async (req: Request, res: Response) => {
  *                 results:
  *                   type: array
  *                   description: Simulation responses for each transaction
- *                   items:
- *                     $ref: '#/components/schemas/SimulationResponse'
  *       400:
  *         description: Invalid request parameters
  *       500:
