@@ -1,12 +1,17 @@
 import { AccessListResult } from '../services/RPCService';
 
-export interface SimulationRequest {
+// Transaction-specific request
+export interface SimulationTransaction {
   from?: string;
   to?: string;
   input?: string;
   value?: string;
   gas?: string;
   gasPrice?: string;
+  accessList?: AccessListResult['accessList'];
+}
+
+export interface SimulationConfig {
   stateObjects?: {
     [address: string]: {
       balance: string;
@@ -21,14 +26,26 @@ export interface SimulationRequest {
     timestamp: string;
   };
   blockNumber?: number | string;
+}
+
+export interface SimulationRequest extends SimulationTransaction, SimulationConfig {
   transactionIndex?: number;
-  accessList?: AccessListResult['accessList'];
 }
 
 export interface SimulationResponse {
   transaction: TransactionObject;
   generated_access_list: GeneratedAccessList[];
   contracts: ContractObjectResponse;
+}
+
+export type BundleExecutionMode = 'atomic' | 'parallel';
+export interface BundleSimulationRequest extends SimulationConfig {
+  transactions: SimulationTransaction[];
+  mode: BundleExecutionMode;
+}
+
+export interface BundleSimulationResponse {
+  results: SimulationResponse[];
 }
 
 export interface ContractObjectResponse {

@@ -91,6 +91,55 @@ export const simulationRequestSchema = Joi.object({
   ).optional(),
 }).required();
 
+// Bundle simulation request validation schema
+export const bundleSimulationRequestSchema = Joi.object({
+  mode: Joi.string().valid('atomic', 'parallel').required()
+    .messages({
+      'any.only': 'Mode must be either "atomic" or "parallel"',
+      'any.required': 'Mode is required',
+    }),
+  transactions: Joi.array()
+    .items(
+      Joi.object({
+        from: addressSchema,
+        to: addressSchema,
+        input: hexStringSchema.optional().default('0x'),
+        value: valueSchema.optional().default('0x0'),
+        gas: gasSchema,
+        gasPrice: gasPriceSchema,
+        accessList: Joi.array().items(
+          Joi.object({
+            address: addressSchema,
+            storageKeys: Joi.array().items(hexStringSchema).optional(),
+          })
+        ).optional(),
+      }).required()
+    )
+    .min(1)
+    .required()
+    .messages({
+      'array.min': 'At least one transaction must be provided',
+      'any.required': 'Transactions are required',
+    }),
+  stateObjects: Joi.object().pattern(
+    Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/),
+    Joi.object({
+      balance: Joi.string().pattern(/^0x[a-fA-F0-9]+$/).required(),
+      storage: Joi.object().pattern(
+        Joi.string().pattern(/^0x[a-fA-F0-9]+$/),
+        Joi.string().pattern(/^0x[a-fA-F0-9]+$/)
+      ).optional(),
+    })
+  ).optional(),
+  generateAccessList: Joi.boolean().default(false),
+  networkId: networkIdSchema,
+  blockHeader: Joi.object({
+    number: Joi.string().required(),
+    timestamp: Joi.string().required(),
+  }).optional(),
+  blockNumber: blockNumberSchema,
+}).required();
+
 // Validation function
 export const validateRequest = <T>(schema: Joi.Schema, data: any): T => {
   const { error, value } = schema.validate(data, {
@@ -111,4 +160,9 @@ export const validateRequest = <T>(schema: Joi.Schema, data: any): T => {
 // Type-safe validation wrapper
 export const validateSimulationRequest = (data: any) => {
   return validateRequest(simulationRequestSchema, data);
+};
+
+// Type-safe validation wrapper for bundle requests
+export const validateBundleSimulationRequest = (data: any) => {
+  return validateRequest(bundleSimulationRequestSchema, data);
 };

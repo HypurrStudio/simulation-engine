@@ -206,6 +206,40 @@ export class RPCService {
   }
 
   /**
+   * Trace multiple transaction calls
+   */
+  async traceCallManySimulate(
+    bundles: { transactions: RPCCallParam[] }[],   // one or more tx-groups
+    blockNumber: string | number = 'latest',
+    tracerParams: RPCTraceParam
+  ): Promise<TraceResult[]> {
+    logger.info('Tracing bundle call', {
+      blockNumber,
+      bundlesCount: bundles.length,
+    });
+
+    logger.debug('TraceCallMany parameters', {
+      bundles,
+      blockNumber: this.toHex(blockNumber),
+      tracerParams,
+    });
+
+    console.log(JSON.stringify([
+      bundles,
+      { blockNumber: this.toHex(blockNumber) },
+      tracerParams,
+    ]));
+
+    const result = await this.makeRPCCall('debug_traceCallMany', [
+      bundles,
+      { blockNumber: this.toHex(blockNumber) },
+      tracerParams,
+    ]);
+
+    return result;
+  }
+
+  /**
    * Trace a transaction hash
    */
   async traceCallTx(

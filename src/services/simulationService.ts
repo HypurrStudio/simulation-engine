@@ -10,6 +10,9 @@ import {
   ContractObjectResponse,
   Events,
   TraceStateDiff,
+  BundleSimulationRequest,
+  BundleSimulationResponse,
+  SimulationTransaction,
 } from '../types/simulation';
 import { rpcService, RPCCallParam, AccessListResult, RPCTraceParam } from './RPCService';
 import { SimulationError } from '../utils/errors';
@@ -191,9 +194,107 @@ export class SimulationService {
   }
 
   /**
+   * Bundle simulation method
+   */
+  async simulateBundleTransactions(request: BundleSimulationRequest): Promise<BundleSimulationResponse> {
+    const simulationId = uuidv4();
+    
+    logger.info('Starting bundle transaction simulation');
+
+    try {
+      // Validate required fields
+      request.transactions.forEach(tx => this.validateRequest(tx));
+
+      // Prepare params
+      const bundleCallParams = this.prepareBundleCallParams(request);
+      const callTracerParams = this.prepareCallTracerParams(request);
+      const prestateTracerParams = this.preparePrestateTracerParams(request);
+
+      // Execute simulation (call traces + prestate)
+      const [callTraceResults, prestateTraceResults] = await Promise.all([
+        rpcService.traceCallManySimulate(
+          bundleCallParams,
+          request.blockNumber || "latest",
+          callTracerParams
+        ),
+        rpcService.traceCallManySimulate(
+          bundleCallParams,
+          request.blockNumber || "latest",
+          prestateTracerParams
+        ),
+      ]);
+
+      const callTraces = this.normalizeCallMany<CallTrace>(callTraceResults as unknown as CallTrace[][], request.mode);
+      const prestateTraces = this.normalizeCallMany<TraceStateDiff>(prestateTraceResults as unknown as TraceStateDiff[][], request.mode);
+
+      const results: SimulationResponse[] = [];
+
+      for (let i = 0; i < request.transactions.length; i++) {
+        const tx = request.transactions[i];
+        const callTrace = callTraces[i] as CallTrace; // each array has 1 trace for that tx
+        const prestateTrace = prestateTraces[i] as TraceStateDiff;
+
+        console.log(callTrace, prestateTrace)
+        const callParams = this.toRPCCallParam(callTrace);
+
+        const logs = this.parseEvents([callTrace]);
+        const contractAddresses = this.collectContractAddresses(
+          [callTrace],
+          tx.to
+        );
+
+        const [blockHeaderResult, accessList, contractsMetadataResult] =
+          await Promise.allSettled([
+            this.fetchBlockHeader(request.blockNumber || "latest"),
+            this.generateAccessList(tx, callParams), // per-tx access list
+            this.fetchContractMetadata(
+              contractAddresses,
+              config.hyperEvmChainId.toString()
+            ),
+          ]);
+
+        const blockHeader =
+          blockHeaderResult.status === "fulfilled"
+            ? blockHeaderResult.value
+            : null;
+        const contractsMetadata =
+          contractsMetadataResult.status === "fulfilled"
+            ? contractsMetadataResult.value
+            : [];
+
+        const { storageDiff, balanceDiff } = this.splitStateDiff(prestateTrace);
+
+        const response = this.buildSimulationResponse(
+          tx,
+          callTrace,
+          [callTrace],
+          accessList.status === "fulfilled" ? accessList.value : [],
+          storageDiff,
+          balanceDiff,
+          blockHeader,
+          contractsMetadata,
+          logs,
+          simulationId
+        );
+
+        results.push(response);
+      }
+
+      return { results };
+    } catch (error: any) {
+      logger.error("Bundle simulation failed", {
+        simulationId,
+        error: error?.message,
+        stack: error?.stack,
+      });
+      throw new SimulationError(`Bundle simulation failed: ${error?.message}`);
+    }
+  }
+
+  /**
    * Validate simulation request
    */
-  private validateRequest(request: SimulationRequest): void {
+  private validateRequest(request: SimulationTransaction): void {
     if (!request.from || !request.to) {
       throw new SimulationError('From and To addresses are required for simulation');
     }
@@ -205,6 +306,28 @@ export class SimulationService {
     if (!this.isValidAddress(request.to)) {
       throw new SimulationError('Invalid to address format');
     }
+  }
+
+  private toRPCCallParam(trace: CallTrace): RPCCallParam {
+    return {
+      from: trace.from,
+      to: trace.to,
+      data: trace.input,        // CallTrace uses `input`, RPCCallParam expects `data`
+      value: trace.value,       // already same
+      gas: trace.gas,           // gas from trace, not gasUsed
+      // gasPrice: undefined,   // optional: set if available in trace or context
+      // accessList: undefined, // optional: depends on whether you extract access lists from traces
+    };
+  }
+
+  private normalizeCallMany<T>(raw: T[][], mode: 'atomic' | 'parallel'): T[] {
+    if (!Array.isArray(raw)) return [];
+    if (mode === 'atomic') {
+      // Atomic returns a single group containing all tx traces
+      return raw[0] ?? [];
+    }
+    // Parallel returns one group per tx, each group has 1 element
+    return raw.map(group => group?.[0]).filter((x): x is T => Boolean(x));
   }
 
   /**
@@ -227,6 +350,41 @@ export class SimulationService {
       gasPrice: request.gasPrice ? this.toHex(request.gasPrice) : undefined,
       accessList: request?.accessList,
     };
+  }
+
+  /**
+   * Prepare bundle call parameters for RPC
+   */
+  private prepareBundleCallParams(
+    request: BundleSimulationRequest
+  ): { transactions: RPCCallParam[] }[] {
+    const mapTx = (tx: SimulationTransaction): RPCCallParam => ({
+      from: tx.from,
+      to: tx.to,
+      data: tx.input || '0x',
+      value: this.toHex(tx.value || '0x0'),
+      gas: this.toHex(tx.gas?.toString() || '1000000'), // default 1,000,000
+      gasPrice: tx.gasPrice ? this.toHex(tx.gasPrice) : undefined,
+      accessList: tx.accessList,
+    });
+
+    // atomic → all tx in one bundle
+    if (request.mode === 'atomic') {
+      return [
+        {
+          transactions: request.transactions.map(mapTx),
+        },
+      ];
+    }
+
+    // parallel → each tx wrapped in its own bundle
+    if (request.mode === 'parallel') {
+      return request.transactions.map((tx) => ({
+        transactions: [mapTx(tx)],
+      }));
+    }
+
+    throw new Error(`Unsupported bundle execution mode: ${request.mode}`);
   }
 
   /**
@@ -298,11 +456,7 @@ export class SimulationService {
   /**
    * Fetch block header information
    */
-  private async fetchBlockHeader(blockNumber?: string | number): Promise<any> {
-    if (!blockNumber || blockNumber === 'latest') {
-      return {};
-    }
-
+  private async fetchBlockHeader(blockNumber: string | number = "latest"): Promise<any> {
     try {
       return await rpcService.getBlockByNumber(blockNumber, false);
     } catch (error: any) {
