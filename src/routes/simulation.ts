@@ -251,6 +251,36 @@ router.post('/bundle/simulate', asyncHandler(async (req: Request, res: Response)
  * GET /api/simulation/health
  * Health check endpoint
  */
+/**
+ * @swagger
+ * /api/health:
+ *   get:
+ *     summary: Health check endpoint
+ *     description: Returns the health status of the simulation engine service.
+ *     tags:
+ *       - Health
+ *     responses:
+ *       200:
+ *         description: Service is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: healthy
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *                   example: 2025-08-23T10:30:00.000Z
+ *                 service:
+ *                   type: string
+ *                   example: simulation-engine
+ *                 version:
+ *                   type: string
+ *                   example: 1.0.0
+ */
 router.get('/health', asyncHandler(async (req: Request, res: Response) => {
   const requestId = req.headers['x-request-id'] as string || 'unknown';
   
