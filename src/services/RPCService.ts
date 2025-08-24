@@ -164,8 +164,19 @@ export class RPCService {
         }
 
         return response.data.result; // success, return
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
+      } catch (error: any) {
+        // Case 2: Axios threw because of non-2xx status
+        if (error.response?.data?.error) {
+          const rpcErr = error.response.data.error;
+          lastError = new RPCError(
+            `RPC Error: ${rpcErr.message || "Unknown error"}${
+              rpcErr.data ? ` | data: ${JSON.stringify(rpcErr.data)}` : ""
+            }`
+          );
+        } else {
+          lastError = error instanceof Error ? error : new Error(String(error));
+        }
+
         logger.warn(`RPC call failed on ${client.defaults.baseURL}, trying next...`, {
           method,
           error: lastError.message,
@@ -173,7 +184,7 @@ export class RPCService {
       }
     }
 
-    throw new RPCError(`All RPC calls failed. Last error: ${lastError?.message}`);
+    throw new RPCError(`All RPC calls failed. ${lastError?.message}`);
   }
 
   /**
